@@ -6,8 +6,8 @@ PrimitiveBuilder *getPrimitiveBuilder() {
   return prim.get();
 }
 
-void initPrimitiveBuilder(MLIRContext *ctxt, Value clk) {
-  prim = std::make_unique<PrimitiveBuilder>(ctxt, clk);
+void initPrimitiveBuilder(MLIRContext *ctxt, const std::string& topModule) {
+  prim = std::make_unique<PrimitiveBuilder>(ctxt, topModule);
 }
 
 Value constant(int64_t value, uint32_t bitWidth) {
@@ -18,12 +18,16 @@ Value constant(int64_t value, uint32_t bitWidth) {
   ).getResult();
 }
 
+ExpressionWrapper ExpressionWrapper::operator~() const {
+  return ExpressionWrapper::make<UnaryExpression>(*this, Expression::Operation::OP_NEG);
+}
+
 ExpressionWrapper ExpressionWrapper::operator&(ExpressionWrapper b) const {
   return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
 }
 
 ExpressionWrapper ExpressionWrapper::operator|(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_OR);
 }
 
 ExpressionWrapper ExpressionWrapper::operator+(ExpressionWrapper b) const {
@@ -31,31 +35,31 @@ ExpressionWrapper ExpressionWrapper::operator+(ExpressionWrapper b) const {
 }
 
 ExpressionWrapper ExpressionWrapper::operator-(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_SUB);
 }
 
 ExpressionWrapper ExpressionWrapper::operator>(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_GT);
 }
 
 ExpressionWrapper ExpressionWrapper::operator>=(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_GEQ);
 }
 
 ExpressionWrapper ExpressionWrapper::operator<(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_LT);
 }
 
 ExpressionWrapper ExpressionWrapper::operator<=(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_LEQ);
 }
 
 ExpressionWrapper ExpressionWrapper::operator==(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_EQ);
 }
 
 ExpressionWrapper ExpressionWrapper::operator!=(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_NEQ);
 }
 
 ExpressionWrapper ExpressionWrapper::operator()(const std::string& fieldName) const {

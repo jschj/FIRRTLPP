@@ -1,5 +1,6 @@
 #include <iostream>
 #include "firrtlpp.hpp"
+#include "queue.hpp"
 
 
 int main(int argc, const char **argv)
@@ -14,8 +15,7 @@ int main(int argc, const char **argv)
   using namespace ::circt::firrtl;
   using namespace ::mlir;
 
-  Value clk;
-  initPrimitiveBuilder(context.get(), clk);
+  initPrimitiveBuilder(context.get(), "SmallQueue");
 
   /*
   auto valid = UInt(1, 1);
@@ -33,7 +33,7 @@ int main(int argc, const char **argv)
    */
 
   //auto queue = TestModuleA();
-  auto queue = Queue(UInt(32));
+  auto queue = SmallQueue(UInt(32), 5);
 
   assert(succeeded(getPrimitiveBuilder()->root.verify()));
   getPrimitiveBuilder()->dump();

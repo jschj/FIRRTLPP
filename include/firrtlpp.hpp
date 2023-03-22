@@ -42,10 +42,9 @@ public:
 
   Value clk;
 public:
-  PrimitiveBuilder(MLIRContext *context, Value clk):
+  PrimitiveBuilder(MLIRContext *context, const std::string& topModule):
     context(context),
-    builder(context),
-    clk(clk) {
+    builder(context) {
 
     root = builder.create<ModuleOp>(
       builder.getUnknownLoc()
@@ -57,7 +56,7 @@ public:
 
     circuitOp = builder.create<CircuitOp>(
       builder.getUnknownLoc(),
-      builder.getStringAttr("Queue")
+      builder.getStringAttr(topModule)
     );
 
     builder = circuitOp.getBodyBuilder();
@@ -89,7 +88,7 @@ public:
 inline std::unique_ptr<PrimitiveBuilder> prim;
 
 PrimitiveBuilder *getPrimitiveBuilder();
-void initPrimitiveBuilder(MLIRContext *ctxt, Value clk);
+void initPrimitiveBuilder(MLIRContext *ctxt, const std::string& topModule);
 
 inline StringAttr strAttr(const std::string& s) {
   return prim->builder.getStringAttr(s);
@@ -177,6 +176,8 @@ public:
 
   // We can now implement all the operators we couldn't before.
 
+  ExpressionWrapper operator~() const;
+
   ExpressionWrapper operator&(ExpressionWrapper b) const;
   ExpressionWrapper operator|(ExpressionWrapper b) const;
   ExpressionWrapper operator+(ExpressionWrapper b) const;
@@ -216,6 +217,22 @@ inline ExpressionWrapper Const(T value, IntType type = IntType::get(prim->contex
 
 template <>
 inline ExpressionWrapper Const(int value, IntType type) {
+  ::llvm::APInt concreteValue =
+    type.getWidthOrSentinel() == -1 ?
+    ::llvm::APInt(64, value) :
+    ::llvm::APInt(type.getWidthOrSentinel(), value);
+
+  Value val = prim->builder.create<ConstantOp>(
+    prim->builder.getUnknownLoc(),
+    type,
+    concreteValue
+  ).getResult();
+
+  return ExpressionWrapper::make<ValueExpression>(val);
+}
+
+template <>
+inline ExpressionWrapper Const(uint32_t value, IntType type) {
   ::llvm::APInt concreteValue =
     type.getWidthOrSentinel() == -1 ?
     ::llvm::APInt(64, value) :
@@ -405,6 +422,26 @@ public:
   }
 };
 
+class MuxExpression : public Expression {
+  ExpressionWrapper cond, positive, negative;
+public:
+  MuxExpression(ExpressionWrapper cond, ExpressionWrapper positive, ExpressionWrapper negative):
+    cond(cond), positive(positive), negative(negative) {}
+
+  Value build() const override {
+    return prim->builder.create<MuxPrimOp>(
+      prim->builder.getUnknownLoc(),
+      cond.build(),
+      positive.build(),
+      negative.build()
+    ).getResult();
+  }
+};
+
+inline ExpressionWrapper Mux(ExpressionWrapper cond, ExpressionWrapper positive, ExpressionWrapper negative) {
+  return ExpressionWrapper::make<MuxExpression>(cond, positive, negative);
+}
+
 // This allows connecting together arbitrary expressions. However, firrtl has a concept
 // of source/sink/duplex flow. So be wary of what you connect together!
 inline void operator<<(ExpressionWrapper dst, ExpressionWrapper src) {
@@ -464,11 +501,17 @@ public:
     );
   }
 
+  //Reg(const Reg& other) = delete;
+
   operator Value() {
     return regOp.getResult();
   }
 
   operator ExpressionWrapper() {
+    return lift(*this);
+  }
+
+  ExpressionWrapper val() {
     return lift(*this);
   }
 
@@ -510,7 +553,8 @@ protected:
 
   InstanceOp instOp;
 
-  void declareOnce() {
+  template <class...Args>
+  void declareOnce(Args&&...args) {
     // check if it has already been declared
     if (modOp)
       return;
@@ -543,7 +587,8 @@ protected:
     if (hasClock)
       prim->setClock(bodyBlock->getArguments()[0]);
 
-    body();
+    static_cast<ConcreteModule *>(this)->body(args...);
+
     prim->builder.setInsertionPointToEnd(lastInsertion);
   }
 
@@ -554,12 +599,9 @@ protected:
       prim->builder.getStringAttr("TestModuleInstance")
     );
   }
-
-  void body() {
-    static_cast<ConcreteModule *>(this)->body();
-  }
 protected:
-  Module(const std::string& moduleName, std::initializer_list<Port> ports, bool hasClock = true, bool isTop = false):
+  template <class...Args>
+  Module(const std::string& moduleName, std::initializer_list<Port> ports, bool hasClock, bool isTop, Args&&...args):
     moduleName(moduleName),
     ports(ports),
     hasClock(hasClock) {
@@ -574,9 +616,9 @@ protected:
     }
     
     // Declaration can happen at most once.
-    declareOnce();
+    declareOnce(args...);
 
-    if (isTop)
+    if (!isTop)
       instantiate();
   }
 
@@ -632,28 +674,6 @@ public:
 template <class T>
 FModuleOp Module<T>::modOp;
 
-class TestModule : public Module<TestModule> {
-public:
-  TestModule():
-    Module<TestModule>(
-      "MyCircuit",
-      {
-        Port(Port::Direction::Input, "x", UInt(6)),
-        Port(Port::Direction::Output, "y", UInt(6))
-      }) {
-
-  }
-
-  void body() {
-    auto x = lift(getArgument("x"));
-    auto c = lift(constant(3, 6));
-    auto reg = Reg(UInt(7));
-    reg << x + c;
-    auto reg2 = Reg(UInt(2));
-    reg2 << c(1, 0);
-  }
-};
-
 inline BundleType ReadyValidIO(FIRRTLBaseType elementType) {
   return BundleType::get(
     {
@@ -665,55 +685,127 @@ inline BundleType ReadyValidIO(FIRRTLBaseType elementType) {
   );
 }
 
-class Queue : public Module<Queue> {
+//class Memory : public Module<Memory> {
+//
+//
+//public:
+//  Memory() {
+//
+//  }
+//};
+
+template <class ScalarType>
+inline std::enable_if_t<std::is_scalar_v<ScalarType>, ScalarType> clog2(const ScalarType& value) {
+  ScalarType n(1);
+  ScalarType bits(0);
+
+  while (n < value) {
+    ++bits;
+    n <<= 1;
+  }
+
+  return bits;
+}
+
+
+
+class Conditional {
 public:
-  Queue(FIRRTLBaseType elementType):
-    Module<Queue>(
-      "Queue",
-      {
-        Port(Port::Direction::Input, "enq", ReadyValidIO(elementType)),
-        Port(Port::Direction::Output, "deq", ReadyValidIO(elementType))
-      })
-       {
+  typedef std::function<void()> BodyCtor;
+private:
+  std::vector<std::tuple<ExpressionWrapper, BodyCtor>> whens;
+  Optional<BodyCtor> otherwiseCtor;
 
+  void build(ExpressionWrapper cond, BodyCtor thenCtor, Optional<BodyCtor> elseCtor) {
+    if (elseCtor.has_value()) {
+      prim->builder.create<WhenOp>(
+        prim->builder.getUnknownLoc(),
+        cond.build(),
+        true,
+        thenCtor,
+        elseCtor.value()
+      );
+    } else {
+      prim->builder.create<WhenOp>(
+        prim->builder.getUnknownLoc(),
+        cond.build(),
+        false,
+        thenCtor
+      );
+    }
   }
 
-  void body() {
-        
-    //auto enqFire = io("enq")("ready") & io("enq")("valid");
+  BodyCtor buildRecursive(size_t index) {
+    auto cond = std::get<0>(whens[index]);
+    auto thenCtor = std::get<1>(whens[index]);
 
-    auto a = Const(1);
-    auto b = Const(2);
+    if (index == whens.size() - 1) {
+      // base case
+      return [&]() {
+        build(cond, thenCtor, otherwiseCtor);
+      };
+    } else {
+      BodyCtor elseCtor = buildRecursive(index + 1);
+      return [&]() {
+        build(cond, thenCtor, elseCtor);
+      };
+    }
+  }
+public:
+  Conditional(ExpressionWrapper condition, BodyCtor bodyCtor) {
+    whens.push_back(std::make_tuple(condition, bodyCtor));
+  }
 
-    auto c = lift(constant(1, 8));
-    auto d = lift(constant(2, 8));
+  Conditional& elseWhen(ExpressionWrapper condition, BodyCtor bodyCtor) {
+    assert(!otherwiseCtor.has_value());
+    whens.push_back(std::make_tuple(condition, bodyCtor));
+    return *this;
+  }
 
-    io("enq")("ready") << lift(constant(0, 1));
+  Conditional otherwise(BodyCtor bodyCtor) {
+    assert(!otherwiseCtor.has_value());
+    otherwiseCtor = bodyCtor;
+    return *this;
+  }
 
-    io("deq")("valid") << (a + b)(0);
-    io("deq")("bits") << 0;
+  void build(int32_t i, OpBuilder builder) {
+    // TODO: otherwise
+    bool isLast = i == whens.size() - 1;
+    auto [cond, bodyCtor] = whens[i];
 
-    //io("deq") << io("enq");
-
+    WhenOp whenOp = builder.create<WhenOp>(
+      builder.getUnknownLoc(),
+      cond.build(),
+      !isLast || otherwiseCtor.has_value()
+    );
     
+    OpBuilder old = prim->builder;
+    prim->builder = whenOp.getThenBodyBuilder();
+    bodyCtor();
+    prim->builder = old;
+
+    if (!isLast) {      
+      OpBuilder old = prim->builder;
+      prim->builder = whenOp.getThenBodyBuilder();
+      bodyCtor();
+      prim->builder = old;
+
+      build(i + 1, whenOp.getElseBodyBuilder());
+    } else if (otherwiseCtor.has_value()) {
+      OpBuilder old = prim->builder;
+      prim->builder = whenOp.getElseBodyBuilder();
+      otherwiseCtor.value()();
+      prim->builder = old;
+    }
+  }
+
+  void build() {
+    build(0, prim->builder);
   }
 };
 
-class TestModuleA : public Module<TestModuleA> {
-  public:
-  TestModuleA():
-    Module<TestModuleA>(
-      "Queue",
-      {
-        Port(Port::Direction::Input, "a", UInt(8)),
-        Port(Port::Direction::Output, "b", UInt(9))
-      }) {
-
-  }
-
-  void body() {
-    io("b") << io("a") + io("a");
-  }
-};
+inline Conditional when(ExpressionWrapper condition, Conditional::BodyCtor bodyCtor) {
+  return Conditional(condition, bodyCtor);
+}
 
 }
