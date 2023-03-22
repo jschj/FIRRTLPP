@@ -101,17 +101,35 @@ inline IntType Bit() {
   return IntType::get(prim->context, false, 1);
 }
 
-inline circt::firrtl::IntType UInt(uint32_t bitWidth) {
-  return circt::firrtl::IntType::get(prim->context, false, bitWidth);
+inline IntType UInt() {
+  return IntType::get(prim->context, false);
 }
 
-inline circt::firrtl::IntType SInt(uint32_t bitWidth) {
-  return circt::firrtl::IntType::get(prim->context, true, bitWidth);
+inline IntType UInt(uint32_t bitWidth) {
+  return IntType::get(prim->context, false, bitWidth);
+}
+
+//inline Value UInt(uint32_t bitWidth, uint64_t value) {
+//  return prim->builder.create<ConstantOp>(
+//    prim->builder.getUnknownLoc(),
+//    UInt(bitWidth),
+//    ::llvm::APInt(bitWidth, value)
+//  ).getResult();
+//}
+
+inline IntType SInt() {
+  return IntType::get(prim->context, true);
+}
+
+inline IntType SInt(uint32_t bitWidth) {
+  return IntType::get(prim->context, true, bitWidth);
 }
 
 inline BundleType Bundle(ArrayRef<BundleType::BundleElement> elements) {
   return BundleType::get(elements, prim->context);
 }
+
+
 
 // can be used to build any kind of expression
 
@@ -190,6 +208,25 @@ public:
 };
 
 inline ExpressionWrapper lift(Value val) {
+  return ExpressionWrapper::make<ValueExpression>(val);
+}
+
+template <class T>
+inline ExpressionWrapper Const(T value, IntType type = IntType::get(prim->context, false));
+
+template <>
+inline ExpressionWrapper Const(int value, IntType type) {
+  ::llvm::APInt concreteValue =
+    type.getWidthOrSentinel() == -1 ?
+    ::llvm::APInt(64, value) :
+    ::llvm::APInt(type.getWidthOrSentinel(), value);
+
+  Value val = prim->builder.create<ConstantOp>(
+    prim->builder.getUnknownLoc(),
+    type,
+    concreteValue
+  ).getResult();
+
   return ExpressionWrapper::make<ValueExpression>(val);
 }
 
@@ -368,10 +405,44 @@ public:
   }
 };
 
-// TODO: I'm very unsure about this!
+// This allows connecting together arbitrary expressions. However, firrtl has a concept
+// of source/sink/duplex flow. So be wary of what you connect together!
 inline void operator<<(ExpressionWrapper dst, ExpressionWrapper src) {
-  Value output = dst.build();
   Value input = src.build();
+  Value output = dst.build();
+
+  prim->builder.create<StrictConnectOp>(
+    prim->builder.getUnknownLoc(),
+    output,
+    input
+  );
+}
+
+inline ExpressionWrapper zero(FIRRTLBaseType type) {
+  int32_t bitWidth = type.getBitWidthOrSentinel();
+  assert(bitWidth != -1 && "type has unknown bit width");
+  IntType inputType = IntType::get(prim->context, false, bitWidth);
+
+  ConstantOp zeroConstant = prim->builder.create<ConstantOp>(
+    prim->builder.getUnknownLoc(),
+    inputType,
+    ::llvm::APInt(bitWidth, 0)
+  );
+
+  Value result = prim->builder.create<BitCastOp>(
+    prim->builder.getUnknownLoc(),
+    type,
+    zeroConstant
+  );
+
+  return lift(result);
+}
+
+inline void operator<<(ExpressionWrapper dst, int n) {
+  assert(n == 0 && "can only be used for 0 initialization");
+  Value output = dst.build();
+  Value input = zero(dyn_cast<FIRRTLBaseType>(output.getType())).build();
+
   prim->builder.create<StrictConnectOp>(
     prim->builder.getUnknownLoc(),
     output,
@@ -410,7 +481,6 @@ public:
     );
   }
 };
-
 
 // ::circt::hw::PortInfo doesn't really fit into our design
 struct Port {
@@ -603,7 +673,8 @@ public:
       {
         Port(Port::Direction::Input, "enq", ReadyValidIO(elementType)),
         Port(Port::Direction::Output, "deq", ReadyValidIO(elementType))
-      }) {
+      })
+       {
 
   }
 
@@ -611,7 +682,18 @@ public:
         
     //auto enqFire = io("enq")("ready") & io("enq")("valid");
 
-    io("deq") << io("enq");
+    auto a = Const(1);
+    auto b = Const(2);
+
+    auto c = lift(constant(1, 8));
+    auto d = lift(constant(2, 8));
+
+    io("enq")("ready") << lift(constant(0, 1));
+
+    io("deq")("valid") << (a + b)(0);
+    io("deq")("bits") << 0;
+
+    //io("deq") << io("enq");
 
     
   }

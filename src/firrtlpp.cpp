@@ -67,7 +67,7 @@ ExpressionWrapper ExpressionWrapper::operator()(size_t hi, size_t lo) const {
 }
 
 ExpressionWrapper ExpressionWrapper::operator()(size_t bitIndex) const {
-
+  return ExpressionWrapper::make<BitsExpression>(*this, bitIndex, bitIndex);
 }
 
 }
