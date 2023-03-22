@@ -372,7 +372,7 @@ public:
 inline void operator<<(ExpressionWrapper dst, ExpressionWrapper src) {
   Value output = dst.build();
   Value input = src.build();
-  prim->builder.create<ConnectOp>(
+  prim->builder.create<StrictConnectOp>(
     prim->builder.getUnknownLoc(),
     output,
     input
@@ -611,7 +611,7 @@ public:
         
     //auto enqFire = io("enq")("ready") & io("enq")("valid");
 
-    io("enq")("ready") << io("enq")("valid");
+    io("deq") << io("enq");
 
     
   }
@@ -624,13 +624,13 @@ class TestModuleA : public Module<TestModuleA> {
       "Queue",
       {
         Port(Port::Direction::Input, "a", UInt(8)),
-        Port(Port::Direction::Output, "b", UInt(8))
+        Port(Port::Direction::Output, "b", UInt(9))
       }) {
 
   }
 
   void body() {
-    io("b") << io("a");
+    io("b") << io("a") + io("a");
   }
 };
 

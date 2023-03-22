@@ -27,7 +27,7 @@ ExpressionWrapper ExpressionWrapper::operator|(ExpressionWrapper b) const {
 }
 
 ExpressionWrapper ExpressionWrapper::operator+(ExpressionWrapper b) const {
-  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_AND);
+  return ExpressionWrapper::make<BinaryExpression>(*this, b, Expression::Operation::OP_ADD);
 }
 
 ExpressionWrapper ExpressionWrapper::operator-(ExpressionWrapper b) const {

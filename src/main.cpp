@@ -32,8 +32,8 @@ int main(int argc, const char **argv)
   reg << count + count;
    */
 
-  //auto testModule = TestModule();
-  auto queue = TestModuleA(); // Queue(UInt(32));
+  auto queue = TestModuleA();
+  //auto queue = Queue(UInt(32));
 
   assert(succeeded(getPrimitiveBuilder()->root.verify()));
   getPrimitiveBuilder()->dump();
