@@ -20,12 +20,11 @@ public:
   }
 
   void body(FIRRTLBaseType elementType, uint32_t depth) {
-    // TODO: bit width inference!
+    assert(depth >= 1);
+    uint32_t countBits = clog2(depth);
     uint32_t depthBits = clog2(depth - 1);
 
-    std::vector<Reg> ringBuf;
-    for (uint32_t i = 0; i < depth; ++i)
-      ringBuf.emplace_back(elementType);
+    auto ringBuf = Vector(elementType, depth);
 
     auto maxIndex = Const(depth - 1);
 
@@ -46,15 +45,26 @@ public:
     io("enq")("ready") << ~wouldEnqOvertake;
     io("deq")("valid") << ~wouldDeqOvertake;
 
-    when (io("enq")("valid") & io("enq")("ready"), [&](){
-      // TODO: actually insert element
+    auto doesEnq = io("enq")("valid") & io("enq")("ready");
+    auto doesDeq = io("deq")("valid") & io("deq")("ready");
+
+    when (doesEnq, [&](){
       enqIndex << Const(1) + enqIndex;
+      ringBuf.write(deqIndex, io("enq")("bits"));
     }).build();
 
-    when (io("deq")("valid") & io("deq")("ready"), [&](){
-      // TODO: actually remove element
+    when (doesDeq, [&](){
       deqIndex << Const(1) + deqIndex;
     }).build();
+
+    io("deq")("bits") << ringBuf(deqIndex);
+
+    auto count = Reg(UInt(countBits));
+    count << count.val() +
+      Mux(doesEnq, Const(1), Const(0)) -
+      Mux(doesDeq, Const(1), Const(0));
+
+    io("count") << count;
   }
 };
 

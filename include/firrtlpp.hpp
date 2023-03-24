@@ -715,42 +715,6 @@ public:
 private:
   std::vector<std::tuple<ExpressionWrapper, BodyCtor>> whens;
   Optional<BodyCtor> otherwiseCtor;
-
-  void build(ExpressionWrapper cond, BodyCtor thenCtor, Optional<BodyCtor> elseCtor) {
-    if (elseCtor.has_value()) {
-      prim->builder.create<WhenOp>(
-        prim->builder.getUnknownLoc(),
-        cond.build(),
-        true,
-        thenCtor,
-        elseCtor.value()
-      );
-    } else {
-      prim->builder.create<WhenOp>(
-        prim->builder.getUnknownLoc(),
-        cond.build(),
-        false,
-        thenCtor
-      );
-    }
-  }
-
-  BodyCtor buildRecursive(size_t index) {
-    auto cond = std::get<0>(whens[index]);
-    auto thenCtor = std::get<1>(whens[index]);
-
-    if (index == whens.size() - 1) {
-      // base case
-      return [&]() {
-        build(cond, thenCtor, otherwiseCtor);
-      };
-    } else {
-      BodyCtor elseCtor = buildRecursive(index + 1);
-      return [&]() {
-        build(cond, thenCtor, elseCtor);
-      };
-    }
-  }
 public:
   Conditional(ExpressionWrapper condition, BodyCtor bodyCtor) {
     whens.push_back(std::make_tuple(condition, bodyCtor));
@@ -807,5 +771,38 @@ public:
 inline Conditional when(ExpressionWrapper condition, Conditional::BodyCtor bodyCtor) {
   return Conditional(condition, bodyCtor);
 }
+
+class Vector {
+  std::vector<Reg> regs;
+public:
+  Vector(FIRRTLBaseType elementType, size_t count) {
+    for (size_t i = 0; i < count; ++i)
+      regs.push_back(Reg(elementType));
+  }
+
+  void write(ExpressionWrapper index, ExpressionWrapper what) {
+    for (int i = 0; i < regs.size(); ++i) {
+      when (Const(i) == index, [&](){
+        regs[i] << what;
+      }).otherwise([&](){
+        regs[i] << regs[i];
+      }).build();
+    }
+  }
+
+  ExpressionWrapper operator()(ExpressionWrapper index) {
+    std::vector<Value> possibleValues;
+    for (size_t i = 0; i < regs.size(); ++i)
+      possibleValues.push_back(regs[i].val().build());
+
+    MultibitMuxOp op = prim->builder.create<MultibitMuxOp>(
+      prim->builder.getUnknownLoc(),
+      index.build(),
+      ArrayRef(possibleValues)
+    );
+
+    return lift(op);
+  }
+};
 
 }

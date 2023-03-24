@@ -53,10 +53,12 @@ add_definitions(${LLVM_DEFINITIONS})
 
 
 add_executable(firrtlpp ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/firrtlpp.cpp)
-
 target_include_directories(firrtlpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ ${CMAKE_CURRENT_SOURCE_DIR}/src/)
-
 target_link_libraries(firrtlpp PRIVATE ${LIBS} CIRCTHW CIRCTSeq CIRCTFIRRTL)
+
+add_executable(firp ${CMAKE_CURRENT_SOURCE_DIR}/src/main2.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp)
+target_include_directories(firp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ ${CMAKE_CURRENT_SOURCE_DIR}/src/)
+target_link_libraries(firp PRIVATE ${LIBS} CIRCTHW CIRCTSeq CIRCTFIRRTL)
 
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
