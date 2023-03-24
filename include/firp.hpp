@@ -66,6 +66,8 @@ public:
 
   FValue operator+(FValue other);
   FValue operator-(FValue other);
+  FValue operator*(FValue other);
+  FValue operator/(FValue other);
   FValue operator&(FValue other);
   FValue operator|(FValue other);
   FValue operator>(FValue other);
@@ -213,7 +215,7 @@ BundleType memWriteType(FIRRTLBaseType dataType, uint32_t addrBits);
 template <class ScalarType>
 inline std::enable_if_t<std::is_scalar_v<ScalarType>, ScalarType> clog2(const ScalarType& value) {
   ScalarType n(1);
-  ScalarType bits(0);
+  ScalarType bits(1);
 
   while (n < value) {
     ++bits;

@@ -77,7 +77,13 @@ FValue mux(FValue cond, FValue pos, FValue neg) {
 }
 
 FValue mux(FValue sel, std::initializer_list<FValue> options) {
+  std::vector<Value> asValues(std::cbegin(options), std::cend(options));
 
+  return firpContext()->builder().create<MultibitMuxOp>(
+    firpContext()->builder().getUnknownLoc(),
+    sel,
+    ValueRange(asValues)
+  ).getResult();
 }
 
 FValue FValue::operator~() {
@@ -93,6 +99,18 @@ FValue FValue::operator+(FValue other) {
 FValue FValue::operator-(FValue other) {
   return lift(
     firpContext()->builder().create<SubPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
+  );
+}
+
+FValue FValue::operator*(FValue other) {
+  return lift(
+    firpContext()->builder().create<MulPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
+  );
+}
+
+FValue FValue::operator/(FValue other) {
+  return lift(
+    firpContext()->builder().create<DivPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
   );
 }
 
