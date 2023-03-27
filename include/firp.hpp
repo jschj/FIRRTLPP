@@ -55,6 +55,9 @@ public:
 
   void beginContext(Value clock, Value reset, OpBuilder bodyBuilder);
   void endContext();
+
+  void beginModuleDeclaration();
+  void endModuleDeclaration();
 };
 
 FirpContext *firpContext();
@@ -103,6 +106,7 @@ FValue cons(uint64_t n, IntType type = IntType::get(firpContext()->context(), fa
 FValue mux(FValue cond, FValue pos, FValue neg);
 FValue mux(FValue sel, std::initializer_list<FValue> options);
 FValue zeros(FIRRTLBaseType type);
+FValue ones(FIRRTLBaseType type);
 
 class Reg {
   RegResetOp regOp;
@@ -144,6 +148,8 @@ class Module {
         port.isInput ? Direction::In : Direction::Out
       );
 
+    firpContext()->beginModuleDeclaration();
+
     modOp = firpContext()->builder().create<FModuleOp>(
       firpContext()->builder().getUnknownLoc(),
       firpContext()->builder().getStringAttr(name),
@@ -157,6 +163,8 @@ class Module {
     firpContext()->beginContext(newClock, newReset, newBuilder);
     static_cast<ConcreteModule *>(this)->body(args...);
     firpContext()->endContext();
+
+    firpContext()->endModuleDeclaration();
   }
 
   void instantiate() {
@@ -165,6 +173,18 @@ class Module {
       modOp,
       firpContext()->builder().getStringAttr(name + "Instance")
     );
+
+    // instantiating includes connecting clk and rst
+    Value clk = firpContext()->getClock();
+    Value rst = firpContext()->getReset();
+
+    // This check is necessary because a module is ALWAYS instantiated, even
+    // the top one. The instantiation is only removed afterwards.
+    if (clk)
+      io("clk") <<= clk;
+
+    if (rst)
+      io("rst") <<= rst;
   }
 public:
   template <class...Args>
@@ -194,7 +214,16 @@ public:
   }
 
   FValue io(const std::string& name) {
-    return modOp.getBodyBlock()->getArguments()[portIndices.at(name)];
+    // io() behaves differently depending on whether we are inside the currently
+    // declared modules or are talking to the ports of an instance.
+
+    // instOp != nullptr iff. it has already been declared!
+    bool isFromOutside = instOp;
+
+    if (isFromOutside)
+      return instOp.getResults()[portIndices.at(name)];
+    else
+      return modOp.getBodyBlock()->getArguments()[portIndices.at(name)];
   }
 
   void makeTop() {
@@ -240,10 +269,12 @@ inline std::enable_if_t<std::is_scalar_v<ScalarType>, ScalarType> clog2(const Sc
 
 class Memory {
   MemOp memOp;
+  FIRRTLBaseType dataType;
 public:
   Memory(FIRRTLBaseType dataType, size_t depth);
   FValue writePort();
   FValue readPort();
+  FValue maskEnable();
 };
 
 void svVerbatim(const std::string& text);

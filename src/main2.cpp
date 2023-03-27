@@ -18,12 +18,24 @@ int main(int argc, const char **argv)
   using namespace ::circt::firrtl;
   using namespace ::mlir;
 
-  initFirpContext(context.get(), "FirpQueue");
+  initFirpContext(context.get(), "AXIStreamTest");
 
   //auto myQueue = MyQueue(uintType(32), 5);
   //auto counter = Counter(123);
-  auto firpQueue = FirpQueue(uintType(32), 5);
-  firpQueue.makeTop();
+  //auto firpQueue = FirpQueue(uintType(32), 5);
+  //firpQueue.makeTop();
+
+  using namespace axis;
+  AXIStreamConfig config{
+    .dataBits = 64,
+    .userBits = 0,
+    .destBits = 0,
+    .idBits = 0
+  };
+
+  AXIStreamTest test(config);
+  //AXIStreamReceiver test(config);
+  test.makeTop();
 
   //Value v = mux(cons(1), cons(123), cons(456));
 

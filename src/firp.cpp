@@ -42,6 +42,14 @@ void FirpContext::endContext() {
   resetStack.pop();  
 }
 
+void FirpContext::beginModuleDeclaration() {
+  beginContext(getClock(), getReset(), circuitOp.getBodyBuilder());
+}
+
+void FirpContext::endModuleDeclaration() {
+  endContext();
+}
+
 static std::unique_ptr<FirpContext> ctxt;
 
 FirpContext *firpContext() {
@@ -104,6 +112,30 @@ FValue zeros(FIRRTLBaseType type) {
     firpContext()->builder().getUnknownLoc(),
     type,
     zeroValue
+  ).getResult();
+}
+
+FValue ones(FIRRTLBaseType type) {
+  int32_t width = type.getBitWidthOrSentinel();
+  assert(llvm::dyn_cast<BundleType>(type).getBitWidthOrSentinel() >= 0);
+  assert(width >= 0);
+
+  ::llvm::APInt concreteValue(width, 0, true);
+  concreteValue -= 1;
+
+  FValue onesValue = ctxt->builder().create<ConstantOp>(
+    ctxt->builder().getUnknownLoc(),
+    uintType(width),
+    concreteValue
+  ).getResult();
+
+  if (llvm::isa<IntType>(type))
+    return onesValue;
+
+  return firpContext()->builder().create<BitCastOp>(
+    firpContext()->builder().getUnknownLoc(),
+    type,
+    onesValue
   ).getResult();
 }
 
@@ -346,12 +378,12 @@ BundleType memWriteType(FIRRTLBaseType dataType, uint32_t addrBits) {
   });
 }
 
-Memory::Memory(FIRRTLBaseType dataType, size_t depth) {
-  size_t addrBits = clog2(depth - 1);
+Memory::Memory(FIRRTLBaseType dataType, size_t depth): dataType(dataType) {
+  //size_t addrBits = clog2(depth - 1);
 
   TypeRange resultTypes{
-    memWriteType(dataType, addrBits),
-    memReadType(dataType, addrBits)
+    MemOp::getTypeForPort(depth, dataType, MemOp::PortKind::Write),
+    MemOp::getTypeForPort(depth, dataType, MemOp::PortKind::Read)
   };
 
   std::vector<Attribute> portNames{
@@ -375,6 +407,43 @@ FValue Memory::writePort() {
 
 FValue Memory::readPort() {
   return memOp.getResults()[1];
+}
+
+FValue Memory::maskEnable() {
+  FIRRTLBaseType maskType = dataType.getMaskType();
+
+  std::function<FValue(FIRRTLBaseType)> constructOnes = [&](FIRRTLBaseType type) -> FValue {
+    if (type.isGround()) {
+      int32_t bitWidth = type.getBitWidthOrSentinel();
+      assert(bitWidth >= 0);
+
+      auto allOnes = llvm::APInt(bitWidth, 0, true) - 1;
+
+      return firpContext()->builder().create<ConstantOp>(
+        firpContext()->builder().getUnknownLoc(),
+        uintType(bitWidth),
+        allOnes
+      ).getResult();
+    }
+
+    if (BundleType bundleType = llvm::dyn_cast<BundleType>(type)) {
+      std::vector<Value> elementOnes;
+
+      for (const auto& element : bundleType.getElements())
+        elementOnes.push_back(constructOnes(element.type));
+
+      return firpContext()->builder().create<BundleCreateOp>(
+        firpContext()->builder().getUnknownLoc(),
+        type,
+        ArrayRef<Value>(elementOnes)
+      ).getResult();
+    }
+
+    assert(false && "unsupported type");
+    return Value();
+  };
+
+  return constructOnes(maskType);
 }
 
 void svVerbatim(const std::string& text) {

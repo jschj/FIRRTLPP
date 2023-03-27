@@ -65,7 +65,7 @@ public:
     ram.writePort()("en") <<= enqFire;
     ram.writePort()("clk") <<= firpContext()->getClock();
     ram.writePort()("data") <<= io("enq")("bits");
-    ram.writePort()("mask") <<= cons(1, bitType());
+    ram.writePort()("mask") <<= ram.maskEnable();
 
     ram.readPort()("addr") <<= deqIndex.read();
     ram.readPort()("en") <<= deqFire;

@@ -31,8 +31,9 @@ void AXIStreamReceiver::body(const AXIStreamConfig& config) {
   auto queue = FirpQueue(elType, 8);
 
   queue.io("enq")("valid") <<= io("AXIS")("TVALID");
-  queue.io("enq")("bits") <<= io("AXIS")("TDATA");
-  queue.io("enq")("last") <<= io("AXIS")("TLAST");
+  queue.io("enq")("bits")("bits") <<= io("AXIS")("TDATA");
+  
+  queue.io("enq")("bits")("last") <<= io("AXIS")("TLAST");
   io("AXIS")("TREADY") <<= queue.io("enq")("ready");
 
   io("deq") <<= queue.io("deq");
@@ -45,16 +46,28 @@ void AXIStreamSender::body(const AXIStreamConfig& config) {
   queue.io("enq") <<= io("enq");
 
   io("AXIS")("TVALID") <<= queue.io("deq")("valid");
-  io("AXIS")("TLAST") <<= queue.io("deq")("last");
-  io("AXIS")("TDATA") <<= queue.io("deq")("bits");
+  io("AXIS")("TLAST") <<= queue.io("deq")("bits")("last");
+  io("AXIS")("TDATA") <<= queue.io("deq")("bits")("bits");
   queue.io("deq")("ready") <<= io("AXIS")("TREADY");
 
   auto ones = cons((1 << config.dataBytes()) - 1, uintType(config.dataBytes()));
   io("AXIS")("TSTRB") <<= ones;
   io("AXIS")("TKEEP") <<= ones;
-  io("AXIS")("TUSER") <<= cons(0);
-  io("AXIS")("TDEST") <<= cons(0);
-  io("AXIS")("TID") <<= cons(0);
+  io("AXIS")("TUSER") <<= cons(0, uintType(config.userBits));
+  io("AXIS")("TDEST") <<= cons(0, uintType(config.destBits));
+  io("AXIS")("TID") <<= cons(0, uintType(config.idBits));
+}
+
+void AXIStreamTest::body(const AXIStreamConfig& config) {
+  auto receiver = AXIStreamReceiver(config);
+  receiver.io("AXIS") <<= io("SLAVE");
+
+  auto sender = AXIStreamSender(config);
+  io("MASTER") <<= sender.io("AXIS");
+
+  auto queue = FirpQueue(withLast(uintType(config.dataBits)), 8);
+  queue.io("enq") <<= receiver.io("deq");
+  sender.io("enq") <<= queue.io("deq");
 }
 
 }

@@ -51,4 +51,19 @@ public:
   void body(const AXIStreamConfig& config);
 };
 
+class AXIStreamTest : public Module<AXIStreamTest> {
+public:
+  AXIStreamTest(const AXIStreamConfig& config):
+    Module<AXIStreamTest>(
+      "AXIStreamTest",
+      {
+        Port("SLAVE", true, AXIStreamBundleType(config)),
+        Port("MASTER", false, AXIStreamBundleType(config))
+      },
+      config
+    ) {}
+
+  void body(const AXIStreamConfig& config);
+};
+
 }
