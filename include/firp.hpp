@@ -36,12 +36,14 @@ class FirpContext {
   MLIRContext *ctxt;
   OpBuilder opBuilder;
   Value clock;
+  Value reset;
 
   ModuleOp root;
   CircuitOp circuitOp;
 
   std::stack<OpBuilder> builderStack;
   std::stack<Value> clockStack;
+  std::stack<Value> resetStack;
 public:
   FirpContext(MLIRContext *ctxt, const std::string& topModule);
 
@@ -49,13 +51,22 @@ public:
   MLIRContext *context() { return ctxt; }
   void dump() { root.dump(); }
   Value getClock() { return clock; }
+  Value getReset() { return reset; }
 
-  void beginContext(Value clock, OpBuilder bodyBuilder);
+  void beginContext(Value clock, Value reset, OpBuilder bodyBuilder);
   void endContext();
 };
 
 FirpContext *firpContext();
 void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule);
+
+// conventient type constructors
+
+IntType uintType();
+IntType uintType(uint32_t bitWidth);
+IntType bitType();
+BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
+BundleType readyValidType(FIRRTLBaseType elementType);
 
 class FValue : public Value {
 public:
@@ -91,12 +102,14 @@ FValue lift(Value val);
 FValue cons(uint64_t n, IntType type = IntType::get(firpContext()->context(), false));
 FValue mux(FValue cond, FValue pos, FValue neg);
 FValue mux(FValue sel, std::initializer_list<FValue> options);
+FValue zeros(FIRRTLBaseType type);
 
 class Reg {
-  RegOp regOp;
+  RegResetOp regOp;
   FIRRTLBaseType type;
 public:
-  Reg(FIRRTLBaseType type);
+  Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name = "");
+  Reg(FIRRTLBaseType type, const std::string& name = "");
   FValue read() { return regOp.getResult(); }
   void write(FValue what);
 };
@@ -138,9 +151,10 @@ class Module {
     );
 
     Value newClock = modOp.getBodyBlock()->getArguments()[0];
+    Value newReset = modOp.getBodyBlock()->getArguments()[1];
     OpBuilder newBuilder = modOp.getBodyBuilder();
 
-    firpContext()->beginContext(newClock, newBuilder);
+    firpContext()->beginContext(newClock, newReset, newBuilder);
     static_cast<ConcreteModule *>(this)->body(args...);
     firpContext()->endContext();
   }
@@ -158,7 +172,12 @@ public:
     name(name),
     ports(ports) {
 
-    // insert clock port
+    // insert clock and reset port
+    this->ports.insert(
+      this->ports.begin(),
+      Port("rst", true, bitType()) // ResetType::get(firpContext()->context()))
+    );
+
     this->ports.insert(
       this->ports.begin(),
       Port("clk", true, ClockType::get(firpContext()->context()))
@@ -203,14 +222,6 @@ public:
 
 Conditional when(FValue cond, Conditional::BodyCtor bodyCtor);
 
-// conventient type constructors
-
-IntType uintType();
-IntType uintType(uint32_t bitWidth);
-IntType bitType();
-BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
-BundleType readyValidType(FIRRTLBaseType elementType);
-
 BundleType memReadType(FIRRTLBaseType dataType, uint32_t addrBits);
 BundleType memWriteType(FIRRTLBaseType dataType, uint32_t addrBits);
 
@@ -219,9 +230,9 @@ inline std::enable_if_t<std::is_scalar_v<ScalarType>, ScalarType> clog2(const Sc
   ScalarType n(1);
   ScalarType bits(1);
 
-  while (n < value) {
+  while (n * 2 - 1 < value) {
     ++bits;
-    n <<= 1;
+    n *= 2;
   }
 
   return bits;
@@ -234,5 +245,7 @@ public:
   FValue writePort();
   FValue readPort();
 };
+
+void svVerbatim(const std::string& text);
 
 }

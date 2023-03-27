@@ -20,12 +20,15 @@ FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(
   opBuilder = circuitOp.getBodyBuilder();
 }
 
-void FirpContext::beginContext(Value clock, OpBuilder bodyBuilder) {
+void FirpContext::beginContext(Value clock, Value reset, OpBuilder bodyBuilder) {
   builderStack.push(opBuilder);
   opBuilder = bodyBuilder;
 
   clockStack.push(this->clock);
   this->clock = clock;
+
+  resetStack.push(this->reset);
+  this->reset = reset;
 }
 
 void FirpContext::endContext() {
@@ -34,6 +37,9 @@ void FirpContext::endContext() {
 
   clock = clockStack.top();
   clockStack.pop();  
+
+  reset = resetStack.top();
+  resetStack.pop();  
 }
 
 static std::unique_ptr<FirpContext> ctxt;
@@ -83,6 +89,21 @@ FValue mux(FValue sel, std::initializer_list<FValue> options) {
     firpContext()->builder().getUnknownLoc(),
     sel,
     ValueRange(asValues)
+  ).getResult();
+}
+
+FValue zeros(FIRRTLBaseType type) {
+  int32_t width = type.getBitWidthOrSentinel();
+  assert(width >= 0);
+  FValue zeroValue = cons(0, uintType(width));
+
+  if (llvm::isa<IntType>(type))
+    return zeroValue;
+
+  return firpContext()->builder().create<BitCastOp>(
+    firpContext()->builder().getUnknownLoc(),
+    type,
+    zeroValue
   ).getResult();
 }
 
@@ -191,13 +212,19 @@ void FValue::operator<<=(FValue other) {
   );
 }
 
-Reg::Reg(FIRRTLBaseType type): type(type) {
-  regOp = firpContext()->builder().create<RegOp>(
+Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(type) {
+  regOp = firpContext()->builder().create<RegResetOp>(
     firpContext()->builder().getUnknownLoc(),
     type,
-    firpContext()->getClock()
+    firpContext()->getClock(),
+    firpContext()->getReset(),
+    resetValue,
+    name
   );
 }
+
+Reg::Reg(FIRRTLBaseType type, const std::string& name):
+  Reg(type, zeros(type), name) {}
 
 void Reg::write(FValue what) {
   FValue input = what;
@@ -217,7 +244,7 @@ void Reg::write(FValue what) {
 }
 
 void Conditional::build(size_t i, OpBuilder builder) {
-  firpContext()->beginContext(firpContext()->getClock(), builder);
+  firpContext()->beginContext(firpContext()->getClock(), firpContext()->getReset(), builder);
 
   bool isLast = i == cases.size() - 1;
   auto [cond, bodyCtor] = cases[i];
@@ -228,14 +255,14 @@ void Conditional::build(size_t i, OpBuilder builder) {
     !isLast || otherwiseCtor.has_value()
   );
 
-  firpContext()->beginContext(firpContext()->getClock(), whenOp.getThenBodyBuilder());
+  firpContext()->beginContext(firpContext()->getClock(), firpContext()->getReset(), whenOp.getThenBodyBuilder());
   bodyCtor();
   firpContext()->endContext();
 
   if (!isLast) {
     build(i + 1, whenOp.getElseBodyBuilder());
   } else if (otherwiseCtor.has_value()) {
-    firpContext()->beginContext(firpContext()->getClock(), whenOp.getElseBodyBuilder());
+    firpContext()->beginContext(firpContext()->getClock(), firpContext()->getReset(), whenOp.getElseBodyBuilder());
     otherwiseCtor.value()();
     firpContext()->endContext();
   }
@@ -348,6 +375,13 @@ FValue Memory::writePort() {
 
 FValue Memory::readPort() {
   return memOp.getResults()[1];
+}
+
+void svVerbatim(const std::string& text) {
+  firpContext()->builder().create<circt::sv::VerbatimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    text
+  );
 }
 
 }

@@ -12,6 +12,7 @@ int main(int argc, const char **argv)
   assert(context->getOrLoadDialect<circt::hw::HWDialect>());
   assert(context->getOrLoadDialect<circt::seq::SeqDialect>());
   assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
+  assert(context->getOrLoadDialect<circt::sv::SVDialect>());
 
   using namespace ::firp;
   using namespace ::circt::firrtl;
