@@ -52,7 +52,11 @@ add_definitions(${LLVM_DEFINITIONS})
 
 
 
-add_executable(firp ${CMAKE_CURRENT_SOURCE_DIR}/src/main2.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp)
+add_executable(firp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/main2.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/AXIStream.cpp
+)
 target_include_directories(firp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/ ${CMAKE_CURRENT_SOURCE_DIR}/src/)
 target_link_libraries(firp PRIVATE ${LIBS} CIRCTHW CIRCTSeq CIRCTFIRRTL)
 

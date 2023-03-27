@@ -11,15 +11,14 @@ public:
     Module<FirpQueue>(
       "FirpQueue",
       {
-        Port("enq", readyValidType(elementType), true),
-        Port("deq", readyValidType(elementType), false)
+        Port("enq", true, readyValidType(elementType)),
+        Port("deq", false, readyValidType(elementType))
       },
-      true,
       elementType, depth
     ) {}
   
   void body(FIRRTLBaseType elementType, size_t depth) {
-    size_t indexBits = clog2(depth);
+    size_t indexBits = clog2(depth - 1);
 
     auto increment = [&](auto value){
       return mux(value == cons(depth - 1), cons(0), value + cons(1));

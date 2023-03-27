@@ -103,12 +103,12 @@ public:
 
 struct Port {
   std::string name;
-  FIRRTLBaseType type;
   bool isInput;
+  FIRRTLBaseType type;
 
   Port() {}
-  Port(const std::string& name, FIRRTLBaseType type, bool isInput):
-    name(name), type(type), isInput(isInput) {}
+  Port(const std::string& name, bool isInput, FIRRTLBaseType type):
+    name(name), isInput(isInput), type(type) {}
 };
 
 template <class ConcreteModule>
@@ -154,14 +154,14 @@ class Module {
   }
 public:
   template <class...Args>
-  Module(const std::string& name, std::initializer_list<Port> ports, bool isTop, Args&&...args):
+  Module(const std::string& name, std::initializer_list<Port> ports, Args&&...args):
     name(name),
     ports(ports) {
 
     // insert clock port
     this->ports.insert(
       this->ports.begin(),
-      Port("clk", ClockType::get(firpContext()->context()), true)
+      Port("clk", true, ClockType::get(firpContext()->context()))
     );
 
     for (uint32_t i = 0; i < this->ports.size(); ++i)
@@ -171,13 +171,15 @@ public:
     if (!modOp)
       declare(args...);
 
-    // instantiate if it is not the top module
-    if (!isTop)
-      instantiate();
+    instantiate();
   }
 
   FValue io(const std::string& name) {
     return modOp.getBodyBlock()->getArguments()[portIndices.at(name)];
+  }
+
+  void makeTop() {
+    instOp.getOperation()->erase();
   }
 };
 

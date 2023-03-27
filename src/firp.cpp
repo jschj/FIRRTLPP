@@ -320,7 +320,7 @@ BundleType memWriteType(FIRRTLBaseType dataType, uint32_t addrBits) {
 }
 
 Memory::Memory(FIRRTLBaseType dataType, size_t depth) {
-  size_t addrBits = clog2(depth);
+  size_t addrBits = clog2(depth - 1);
 
   TypeRange resultTypes{
     memWriteType(dataType, addrBits),
