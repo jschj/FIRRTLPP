@@ -143,6 +143,7 @@ FValue mux(FValue cond, FValue pos, FValue neg);
 FValue mux(FValue sel, std::initializer_list<FValue> options);
 FValue zeros(FIRRTLBaseType type);
 FValue ones(FIRRTLBaseType type);
+FValue doesFire(FValue readyValidValue);
 
 class Reg {
   RegResetOp regOp;

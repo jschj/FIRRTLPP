@@ -235,6 +235,10 @@ FValue ones(FIRRTLBaseType type) {
   ).getResult();
 }
 
+FValue doesFire(FValue readyValidValue) {
+  return readyValidValue("valid") & readyValidValue("ready");
+}
+
 FValue FValue::operator~() {
   return firpContext()->builder().create<NotPrimOp>(firpContext()->builder().getUnknownLoc(), *this).getResult();
 }
@@ -333,10 +337,32 @@ FValue FValue::operator()(const std::string& fieldName) {
 }
 
 void FValue::operator<<=(FValue other) {
+  FValue src, dst;
+
+  src = other;
+  dst = *this;
+
+  if (llvm::isa<IntType>(getType()) && llvm::isa<IntType>(other.getType())) {
+    IntType dstInt = llvm::dyn_cast<IntType>(getType());
+    IntType srcInt = llvm::dyn_cast<IntType>(other.getType());
+
+    int32_t dstWidth = dstInt.getBitWidthOrSentinel();
+    int32_t srcWidth = srcInt.getBitWidthOrSentinel();
+
+    if (dstWidth >= 0 && srcWidth) {
+      if (srcWidth < dstWidth)
+        src = other.extend(dstWidth); // truncate
+      else if (dstWidth < srcWidth)
+        src = other(dstWidth - 1, 0); // extend
+    }
+  } else if (getType() != other.getType()) {
+    llvm::outs() << "Connecting two different types together!\n";
+  }
+
   firpContext()->builder().create<StrictConnectOp>(
     firpContext()->builder().getUnknownLoc(),
-    *this,
-    other
+    dst,
+    src
   );
 }
 
