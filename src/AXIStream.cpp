@@ -26,6 +26,26 @@ BundleType withLast(FIRRTLBaseType type) {
   });
 }
 
+AXIStreamReceiver::AXIStreamReceiver(const AXIStreamConfig& config):
+  Module<AXIStreamReceiver>(
+    "AXIStreamReceiver",
+    {
+      Port("AXIS", true, AXIStreamBundleType(config)),
+      Port("deq", false, readyValidType(withLast(uintType(config.dataBits))))
+    },
+    config
+  ) {}
+
+AXIStreamSender::AXIStreamSender(const AXIStreamConfig& config):
+  Module<AXIStreamSender>(
+    "AXIStreamSender",
+    {
+      Port("AXIS", false, AXIStreamBundleType(config)),
+      Port("enq", true, readyValidType(withLast(uintType(config.dataBits))))
+    },
+    config
+  ) {}
+
 void AXIStreamReceiver::body(const AXIStreamConfig& config) {
   auto elType = withLast(uintType(config.dataBits));
   auto queue = FirpQueue(elType, 8);
@@ -68,6 +88,20 @@ void AXIStreamTest::body(const AXIStreamConfig& config) {
   auto queue = FirpQueue(withLast(uintType(config.dataBits)), 8);
   queue.io("enq") <<= receiver.io("deq");
   sender.io("enq") <<= queue.io("deq");
+}
+
+}
+
+namespace llvm {
+
+template <>
+hash_code hash_value(const firp::axis::AXIStreamConfig& config) {
+  return hash_combine(
+    config.dataBits,
+    config.userBits,
+    config.destBits,
+    config.idBits
+  );
 }
 
 }

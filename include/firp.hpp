@@ -2,8 +2,10 @@
 
 #include <memory>
 #include <stack>
+#include <functional>
 
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
 
 #include "circt/Dialect/HW/HWDialect.h"
@@ -27,10 +29,34 @@
 #include "circt/Dialect/FIRRTL/FIRRTLTypes.h"
 #include "circt/Dialect/FIRRTL/FIRRTLDialect.h"
 
+#include "llvm/ADT/DenseMap.h"
+
+
+namespace llvm {
+
+hash_code hash_value(const ::circt::firrtl::BundleType::BundleElement& element);
+hash_code hash_value(const ::circt::firrtl::FIRRTLBaseType& type);
+
+template <class T>
+std::enable_if_t<std::negation_v<std::is_integral<T>>, hash_code> hash_value(const T&);
+
+}
+
 namespace firp {
 
 using namespace ::mlir;
 using namespace ::circt::firrtl;
+
+class DeclaredModules {
+  llvm::DenseMap<llvm::hash_code, FModuleOp> declaredModules;
+  std::optional<llvm::hash_code> topMod;
+public:
+  bool isDeclared(llvm::hash_code hashValue);
+  void addDeclared(llvm::hash_code hashValue, FModuleOp decl);
+  FModuleOp getDeclared(llvm::hash_code hashValue);
+  void setTop(llvm::hash_code hashValue);
+  FModuleOp getTop();
+};
 
 class FirpContext {
   MLIRContext *ctxt;
@@ -45,6 +71,8 @@ class FirpContext {
   std::stack<Value> clockStack;
   std::stack<Value> resetStack;
 public:
+  DeclaredModules declaredModules;
+
   FirpContext(MLIRContext *ctxt, const std::string& topModule);
 
   OpBuilder& builder() { return opBuilder; }
@@ -58,6 +86,12 @@ public:
 
   void beginModuleDeclaration();
   void endModuleDeclaration();
+
+  void finish();
+
+  void verify() {
+    assert(succeeded(::mlir::verify(root.getOperation(), true)));
+  }
 };
 
 FirpContext *firpContext();
@@ -99,6 +133,8 @@ public:
   // processing stages might fail if for example types or directions do not
   // fit together!
   void operator<<=(FValue other);
+
+  FValue extend(size_t width);
 };
 
 FValue lift(Value val);
@@ -130,12 +166,12 @@ struct Port {
 
 template <class ConcreteModule>
 class Module {
-  // ensures that there exists exactly one FModuleOp per module class
-  static FModuleOp modOp;
-
+  llvm::hash_code hashValue;
+  std::string baseName;
   std::string name;
   std::vector<Port> ports;
   std::unordered_map<std::string, uint32_t> portIndices;
+  FModuleOp modOp;
   InstanceOp instOp;
 
   template <class...Args>
@@ -150,11 +186,14 @@ class Module {
 
     firpContext()->beginModuleDeclaration();
 
-    modOp = firpContext()->builder().create<FModuleOp>(
+    FModuleOp modOp = firpContext()->builder().create<FModuleOp>(
       firpContext()->builder().getUnknownLoc(),
       firpContext()->builder().getStringAttr(name),
       portInfos
     );
+
+    firpContext()->declaredModules.addDeclared(hashValue, modOp);
+    this->modOp = modOp;
 
     Value newClock = modOp.getBodyBlock()->getArguments()[0];
     Value newReset = modOp.getBodyBlock()->getArguments()[1];
@@ -171,7 +210,7 @@ class Module {
     instOp = firpContext()->builder().create<InstanceOp>(
       firpContext()->builder().getUnknownLoc(),
       modOp,
-      firpContext()->builder().getStringAttr(name + "Instance")
+      firpContext()->builder().getStringAttr(name + "_instance")
     );
 
     // instantiating includes connecting clk and rst
@@ -186,16 +225,29 @@ class Module {
     if (rst)
       io("rst") <<= rst;
   }
+
+  template <class...Args>
+  static llvm::hash_code computeModuleHash(const std::string& name, const Args&...args) {
+    auto codes = std::make_tuple(llvm::hash_value(args)...);
+
+    return llvm::hash_combine(
+      name,
+      llvm::hash_value(codes)
+    );
+  }
 public:
+  // All Args must be hashable.
   template <class...Args>
   Module(const std::string& name, std::initializer_list<Port> ports, Args&&...args):
-    name(name),
+    hashValue(computeModuleHash(name, args...)),
+    baseName(name),
+    name(name + "_" + std::to_string(hashValue)),
     ports(ports) {
 
     // insert clock and reset port
     this->ports.insert(
       this->ports.begin(),
-      Port("rst", true, bitType()) // ResetType::get(firpContext()->context()))
+      Port("rst", true, bitType())
     );
 
     this->ports.insert(
@@ -206,9 +258,10 @@ public:
     for (uint32_t i = 0; i < this->ports.size(); ++i)
       portIndices[this->ports[i].name] = i;
 
-    // declare only once
-    if (!modOp)
+    if (!firpContext()->declaredModules.isDeclared(hashValue))
       declare(args...);
+
+    modOp = firpContext()->declaredModules.getDeclared(hashValue);
 
     instantiate();
   }
@@ -228,11 +281,13 @@ public:
 
   void makeTop() {
     instOp.getOperation()->erase();
+    firpContext()->declaredModules.setTop(hashValue);
+  }
+
+  std::string getBaseName() const {
+    return baseName;
   }
 };
-
-template <class ConcreteModule>
-FModuleOp Module<ConcreteModule>::modOp;
 
 class Conditional {
 public:

@@ -12,15 +12,16 @@ public:
       "FirpQueue",
       {
         Port("enq", true, readyValidType(elementType)),
-        Port("deq", false, readyValidType(elementType))
+        Port("deq", false, readyValidType(elementType)),
+        Port("count", false, uintType(clog2(depth)))
       },
       elementType, depth
     ) {}
   
   void body(FIRRTLBaseType elementType, size_t depth) {
     // This hack is easier than implementing simultaneous enqueu and dequeue logic.
+    size_t ioCountBits = clog2(depth - 1);
     depth += 1;
-
     size_t indexBits = clog2(depth - 1);
 
     auto increment = [&](auto value){
@@ -52,6 +53,8 @@ public:
       + mux(enqFire, cons(1), cons(0))
       - mux(deqFire, cons(1), cons(0))
     );
+
+    io("count") <<= count.read()(ioCountBits, 0);
 
     when (enqFire, [&](){
       enqIndex.write(nextEnqIndex);

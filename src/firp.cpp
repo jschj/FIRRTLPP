@@ -1,7 +1,67 @@
 #include "firp.hpp"
 
 
+namespace llvm {
+
+hash_code hash_value(const ::circt::firrtl::BundleType::BundleElement& element) {
+  return hash_combine(
+    element.name,
+    element.isFlip,
+    element.type
+  );
+}
+
+hash_code hash_value(const ::circt::firrtl::FIRRTLBaseType& type) {
+  using namespace ::circt::firrtl;
+
+  return TypeSwitch<FIRRTLBaseType, hash_code>(type)
+    .Case<IntType>([](IntType type){
+      return hash_combine(
+        type.getWidthOrSentinel(),
+        type.isSigned()
+      );
+    })
+    .Case<BundleType>([](BundleType type){
+      std::vector<hash_code> codes;
+      for (const auto& el : type.getElements())
+        codes.push_back(hash_value(el));
+
+      return hash_combine_range(
+        codes.begin(),
+        codes.end()
+      );
+    })
+    .Default([](FIRRTLBaseType){
+      assert(false && "type is unsupported");
+      return 0;
+    });
+}
+
+}
+
 namespace firp {
+
+bool DeclaredModules::isDeclared(llvm::hash_code hashValue) {
+  return declaredModules.find(hashValue) != declaredModules.end();
+}
+
+void DeclaredModules::addDeclared(llvm::hash_code hashValue, FModuleOp decl) {
+  declaredModules[hashValue] = decl;
+}
+
+FModuleOp DeclaredModules::getDeclared(llvm::hash_code hashValue) {
+  return declaredModules[hashValue];
+}
+
+void DeclaredModules::setTop(llvm::hash_code hashValue) {
+  assert(isDeclared(hashValue));
+  topMod = hashValue;
+}
+
+FModuleOp DeclaredModules::getTop() {
+  assert(topMod.has_value());
+  return declaredModules[topMod.value()];
+}
 
 FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(ctxt), opBuilder(ctxt) {
   root = builder().create<ModuleOp>(
@@ -48,6 +108,42 @@ void FirpContext::beginModuleDeclaration() {
 
 void FirpContext::endModuleDeclaration() {
   endContext();
+}
+
+void FirpContext::finish() {
+  // Our top module currently has the name "MyTop_<some hash value>" whereas CircuitOp
+  // is called MyTop. We construct a module named MyTop that wraps MyTop_<some hash value>.
+
+  beginModuleDeclaration();
+
+  FModuleOp top = declaredModules.getTop();
+  FModuleOp wrapper = opBuilder.create<FModuleOp>(
+    opBuilder.getUnknownLoc(),
+    opBuilder.getStringAttr(circuitOp.getName()),
+    top.getPorts()
+  );
+
+  beginContext(getClock(), getReset(), wrapper.getBodyBuilder());
+
+  InstanceOp inst = opBuilder.create<InstanceOp>(
+    opBuilder.getUnknownLoc(),
+    top,
+    "wrapper_instance"
+  );
+
+  for (size_t i = 0; i < top.getNumPorts(); ++i) {
+    FValue arg = wrapper.getArguments()[i];
+    FValue res = inst.getResults()[i];
+
+    if (top.getPorts()[i].direction == Direction::In)
+      res <<= arg;
+    else
+      arg <<= res;
+  }
+
+  endContext();
+
+  endModuleDeclaration();
 }
 
 static std::unique_ptr<FirpContext> ctxt;
@@ -242,6 +338,16 @@ void FValue::operator<<=(FValue other) {
     *this,
     other
   );
+}
+
+FValue FValue::extend(size_t width) {
+  assert(llvm::isa<IntType>(getType()));
+
+  return firpContext()->builder().create<PadPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this,
+    firpContext()->builder().getI32IntegerAttr(width)
+  ).getResult();
 }
 
 Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(type) {

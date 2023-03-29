@@ -2,6 +2,8 @@
 
 #include "firp.hpp"
 
+#include "llvm/ADT/Hashing.h"
+
 
 namespace firp::axis {
 
@@ -19,35 +21,13 @@ BundleType withLast(FIRRTLBaseType type);
 
 class AXIStreamReceiver : public Module<AXIStreamReceiver> {
 public:
-  AXIStreamReceiver(const AXIStreamConfig& config):
-    Module<AXIStreamReceiver>(
-      "AXIStreamReceiver",
-      {
-        Port("AXIS", true, AXIStreamBundleType(config)),
-        Port("deq", false, readyValidType(withLast(uintType(config.dataBits))))
-      },
-      config
-    ) {
-
-  }
-
+  AXIStreamReceiver(const AXIStreamConfig& config);
   void body(const AXIStreamConfig& config);
 };
 
 class AXIStreamSender : public Module<AXIStreamSender> {
 public:
-  AXIStreamSender(const AXIStreamConfig& config):
-    Module<AXIStreamSender>(
-      "AXIStreamSender",
-      {
-        Port("AXIS", false, AXIStreamBundleType(config)),
-        Port("enq", true, readyValidType(withLast(uintType(config.dataBits))))
-      },
-      config
-    ) {
-
-  }
-
+  AXIStreamSender(const AXIStreamConfig& config);
   void body(const AXIStreamConfig& config);
 };
 
