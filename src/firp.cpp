@@ -80,6 +80,21 @@ FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(
   opBuilder = circuitOp.getBodyBuilder();
 }
 
+FirpContext::FirpContext(ModuleOp root, const std::string& topModule): ctxt(root.getContext()), opBuilder(ctxt) {
+  this->root = root;
+
+  builder().setInsertionPointToStart(
+    &root.getBodyRegion().back()
+  );
+
+  circuitOp = builder().create<CircuitOp>(
+    builder().getUnknownLoc(),
+    builder().getStringAttr(topModule)
+  );
+
+  opBuilder = circuitOp.getBodyBuilder();
+}
+
 void FirpContext::beginContext(Value clock, Value reset, OpBuilder bodyBuilder) {
   builderStack.push(opBuilder);
   opBuilder = bodyBuilder;
@@ -154,6 +169,10 @@ FirpContext *firpContext() {
 
 void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule) {
   ctxt = std::make_unique<FirpContext>(mlirCtxt, topModule);
+}
+
+void initFirpContext(ModuleOp root, const std::string& topModule) {
+  ctxt = std::make_unique<FirpContext>(root, topModule);
 }
 
 FValue lift(Value val) {
@@ -466,6 +485,10 @@ IntType uintType(uint32_t bitWidth) {
 
 IntType bitType() {
   return uintType(1);
+}
+
+ClockType clockType() {
+  return ClockType::get(firpContext()->context());
 }
 
 BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements) {

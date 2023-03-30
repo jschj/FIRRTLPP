@@ -74,6 +74,7 @@ public:
   DeclaredModules declaredModules;
 
   FirpContext(MLIRContext *ctxt, const std::string& topModule);
+  FirpContext(ModuleOp root, const std::string& topModule);
 
   OpBuilder& builder() { return opBuilder; }
   MLIRContext *context() { return ctxt; }
@@ -96,12 +97,14 @@ public:
 
 FirpContext *firpContext();
 void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule);
+void initFirpContext(ModuleOp root, const std::string& topModule);
 
 // conventient type constructors
 
 IntType uintType();
 IntType uintType(uint32_t bitWidth);
 IntType bitType();
+ClockType clockType();
 BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
 BundleType readyValidType(FIRRTLBaseType elementType);
 
