@@ -50,12 +50,16 @@ using namespace ::circt::firrtl;
 class DeclaredModules {
   llvm::DenseMap<llvm::hash_code, FModuleOp> declaredModules;
   std::optional<llvm::hash_code> topMod;
+  llvm::DenseMap<llvm::hash_code, FExtModuleOp> externalDeclaredModules;
 public:
   bool isDeclared(llvm::hash_code hashValue);
   void addDeclared(llvm::hash_code hashValue, FModuleOp decl);
   FModuleOp getDeclared(llvm::hash_code hashValue);
   void setTop(llvm::hash_code hashValue);
   FModuleOp getTop();
+
+  void addDeclared(llvm::hash_code hashValue, FExtModuleOp decl);
+  FExtModuleOp getExternalDeclared(llvm::hash_code hashValue);
 };
 
 class FirpContext {
@@ -290,6 +294,90 @@ public:
 
   std::string getBaseName() const {
     return baseName;
+  }
+};
+
+template <class ConcreteModule>
+class ExternalModule {
+  llvm::hash_code hashValue;
+  std::string name;
+  std::vector<Port> ports;
+  std::unordered_map<std::string, uint32_t> portIndices;
+  FExtModuleOp modOp;
+  InstanceOp instOp;
+
+  void declare() {
+    std::vector<PortInfo> portInfos;
+    for (const Port& port : ports)
+      portInfos.emplace_back(
+        firpContext()->builder().getStringAttr(port.name),
+        port.type,
+        port.isInput ? Direction::In : Direction::Out
+      );
+
+    firpContext()->beginModuleDeclaration();
+
+    modOp = firpContext()->builder().create<FExtModuleOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(name),
+      portInfos
+    );
+
+    firpContext()->declaredModules.addDeclared(hashValue, modOp);
+    firpContext()->endModuleDeclaration();
+  }
+
+  void instantiate() {
+    instOp = firpContext()->builder().create<InstanceOp>(
+      firpContext()->builder().getUnknownLoc(),
+      modOp,
+      firpContext()->builder().getStringAttr(name + "_instance")
+    );
+
+    // instantiating includes connecting clk and rst
+    Value clk = firpContext()->getClock();
+    Value rst = firpContext()->getReset();
+
+    // This check is necessary because a module is ALWAYS instantiated, even
+    // the top one. The instantiation is only removed afterwards.
+    if (clk)
+      io("clk") <<= clk;
+
+    if (rst)
+      io("rst") <<= rst;
+  }
+public:
+  // All Args must be hashable.
+  ExternalModule(const std::string& name, std::initializer_list<Port> ports):
+    hashValue(llvm::hash_value(name)),
+    name(name),
+    ports(ports) {
+
+    // insert clock and reset port
+    this->ports.insert(
+      this->ports.begin(),
+      Port("rst", true, bitType())
+    );
+
+    this->ports.insert(
+      this->ports.begin(),
+      Port("clk", true, ClockType::get(firpContext()->context()))
+    );
+
+    for (uint32_t i = 0; i < this->ports.size(); ++i)
+      portIndices[this->ports[i].name] = i;
+
+    if (!firpContext()->declaredModules.isDeclared(hashValue))
+      declare();
+
+    modOp = firpContext()->declaredModules.getExternalDeclared(hashValue);
+
+    instantiate();
+  }
+
+  FValue io(const std::string& name) {
+    // Connection always happens from outside with external modules.
+    return instOp.getResults()[portIndices.at(name)];
   }
 };
 

@@ -5,8 +5,43 @@
 
 using namespace firp;
 
-int main(int argc, const char **argv)
-{
+class ExternalQueue : public ExternalModule<ExternalQueue> {
+public:
+  ExternalQueue():
+    ExternalModule<ExternalQueue>(
+      "SomeQueue",
+      {
+        Port("enq", true, readyValidType(uintType(32))),
+        Port("deq", false, readyValidType(uintType(32)))
+      }
+    ) {}
+};
+
+class MyTop : public Module<MyTop> {
+public:
+  MyTop():
+    Module<MyTop>(
+      "MyTop",
+      {
+
+      }
+    ) {}
+
+  void body() {
+    ExternalQueue q1;
+    ExternalQueue q2;
+
+    q1.io("enq")("valid") <<= io("rst");
+    q1.io("enq")("bits") <<= cons(0, uintType(32));
+    q1.io("deq")("ready") <<= io("rst");
+
+    q2.io("enq")("valid") <<= io("rst");
+    q2.io("enq")("bits") <<= cons(0, uintType(32));
+    q2.io("deq")("ready") <<= io("rst");
+  }
+};
+
+int main(int argc, const char **argv) {
   std::unique_ptr<mlir::MLIRContext> context = std::make_unique<mlir::MLIRContext>();
 
   assert(context->getOrLoadDialect<circt::hw::HWDialect>());
@@ -18,27 +53,17 @@ int main(int argc, const char **argv)
   using namespace ::circt::firrtl;
   using namespace ::mlir;
 
-  initFirpContext(context.get(), "AXIStreamTest");
+  initFirpContext(context.get(), "MyTop");
 
   //auto myQueue = MyQueue(uintType(32), 5);
   //auto counter = Counter(123);
   //auto firpQueue = FirpQueue(uintType(32), 5);
   //firpQueue.makeTop();
 
-  using namespace axis;
-  AXIStreamConfig config{
-    .dataBits = 64,
-    .userBits = 0,
-    .destBits = 0,
-    .idBits = 0
-  };
+  MyTop myTop;
+  myTop.makeTop();
 
-  AXIStreamTest test(config);
-  //AXIStreamReceiver test(config);
-  test.makeTop();
-
-  //Value v = mux(cons(1), cons(123), cons(456));
-
+  firpContext()->finish();
   firpContext()->dump();
 
   return 0;

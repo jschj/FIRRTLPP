@@ -42,7 +42,8 @@ hash_code hash_value(const ::circt::firrtl::FIRRTLBaseType& type) {
 namespace firp {
 
 bool DeclaredModules::isDeclared(llvm::hash_code hashValue) {
-  return declaredModules.find(hashValue) != declaredModules.end();
+  return declaredModules.find(hashValue) != declaredModules.end() ||
+    externalDeclaredModules.find(hashValue) != externalDeclaredModules.end();
 }
 
 void DeclaredModules::addDeclared(llvm::hash_code hashValue, FModuleOp decl) {
@@ -61,6 +62,14 @@ void DeclaredModules::setTop(llvm::hash_code hashValue) {
 FModuleOp DeclaredModules::getTop() {
   assert(topMod.has_value());
   return declaredModules[topMod.value()];
+}
+
+void DeclaredModules::addDeclared(llvm::hash_code hashValue, FExtModuleOp decl) {
+  externalDeclaredModules[hashValue] = decl;
+}
+
+FExtModuleOp DeclaredModules::getExternalDeclared(llvm::hash_code hashValue) {
+  return externalDeclaredModules[hashValue];
 }
 
 FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(ctxt), opBuilder(ctxt) {
