@@ -617,4 +617,17 @@ void svVerbatim(const std::string& text) {
   );
 }
 
+void svCocoTBVerbatim(const std::string& moduleName) {
+  std::stringstream ss;
+  ss << "`ifdef COCOTB_SIM\n"
+     << "  initial begin\n"
+     << "    $dumpfile(\"" << moduleName << ".vcd\");\n"
+     << "    $dumpvars (0, " << moduleName << ");\n"
+     << "    #1;\n"
+     << "  end\n"
+     << "`endif\n";
+
+  svVerbatim(ss.str());
+}
+
 }

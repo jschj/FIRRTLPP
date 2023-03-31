@@ -10,7 +10,7 @@ public:
   ExternalQueue():
     ExternalModule<ExternalQueue>(
       "SomeQueue",
-      {
+      std::vector<Port>{
         Port("enq", true, readyValidType(uintType(32))),
         Port("deq", false, readyValidType(uintType(32)))
       }
@@ -31,13 +31,15 @@ public:
     ExternalQueue q1;
     ExternalQueue q2;
 
-    q1.io("enq")("valid") <<= io("rst");
+    q1.io("enq")("valid") <<= io("reset");
     q1.io("enq")("bits") <<= cons(0, uintType(32));
-    q1.io("deq")("ready") <<= io("rst");
+    q1.io("deq")("ready") <<= io("reset");
 
-    q2.io("enq")("valid") <<= io("rst");
+    q2.io("enq")("valid") <<= io("reset");
     q2.io("enq")("bits") <<= cons(0, uintType(32));
-    q2.io("deq")("ready") <<= io("rst");
+    q2.io("deq")("ready") <<= io("reset");
+
+    FirpQueue q3(uintType(32), 5);
   }
 };
 

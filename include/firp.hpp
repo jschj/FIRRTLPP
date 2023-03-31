@@ -293,6 +293,10 @@ public:
     firpContext()->declaredModules.setTop(hashValue);
   }
 
+  std::string getName() const {
+    return name;
+  }
+
   std::string getBaseName() const {
     return baseName;
   }
@@ -427,5 +431,6 @@ public:
 };
 
 void svVerbatim(const std::string& text);
+void svCocoTBVerbatim(const std::string& moduleName);
 
 }

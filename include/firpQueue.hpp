@@ -74,16 +74,8 @@ public:
     ram.readPort()("en") <<= deqFire;
     ram.readPort()("clk") <<= firpContext()->getClock();
     io("deq")("bits") <<= ram.readPort()("data");
-/*
-    svVerbatim(R"(
-`ifdef COCOTB_SIM
-  initial begin
-    $dumpfile("FirpQueue.vcd");
-    $dumpvars (0, FirpQueue);
-    #1;
-  end
-`endif
-)");*/
+
+    svCocoTBVerbatim(getName());
   }
 };
 
