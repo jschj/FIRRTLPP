@@ -163,6 +163,17 @@ public:
   void write(FValue what);
 };
 
+// mainly used for naming things and easier debugging
+class Wire {
+  WireOp wireOp;
+  FIRRTLBaseType type;
+public:
+  Wire(FIRRTLBaseType type, const std::string& name = "");
+  Wire(FValue what, const std::string& name = "");
+  operator FValue();
+  void operator<<=(FValue what);
+};
+
 struct Port {
   std::string name;
   bool isInput;

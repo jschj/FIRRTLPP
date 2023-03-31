@@ -74,8 +74,6 @@ public:
     ram.readPort()("en") <<= deqFire;
     ram.readPort()("clk") <<= firpContext()->getClock();
     io("deq")("bits") <<= ram.readPort()("data");
-
-    svCocoTBVerbatim(getName());
   }
 };
 

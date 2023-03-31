@@ -435,6 +435,31 @@ void Reg::write(FValue what) {
   );
 }
 
+Wire::Wire(FIRRTLBaseType type, const std::string& name) {
+  wireOp = firpContext()->builder().create<WireOp>(
+    firpContext()->builder().getUnknownLoc(),
+    type,
+    name
+  );
+}
+
+Wire::Wire(FValue what, const std::string& name):
+  Wire(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name) {
+  *this <<= what;
+}
+
+Wire::operator FValue() {
+  return wireOp.getResult();
+}
+
+void Wire::operator<<=(FValue what) {
+  firpContext()->builder().create<StrictConnectOp>(
+    firpContext()->builder().getUnknownLoc(),
+    wireOp,
+    what
+  );
+}
+
 void Conditional::build(size_t i, OpBuilder builder) {
   firpContext()->beginContext(firpContext()->getClock(), firpContext()->getReset(), builder);
 
