@@ -74,7 +74,7 @@ public:
     ram.readPort()("en") <<= deqFire;
     ram.readPort()("clk") <<= firpContext()->getClock();
     io("deq")("bits") <<= ram.readPort()("data");
-
+/*
     svVerbatim(R"(
 `ifdef COCOTB_SIM
   initial begin
@@ -83,7 +83,7 @@ public:
     #1;
   end
 `endif
-)");
+)");*/
   }
 };
 

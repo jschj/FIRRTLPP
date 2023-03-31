@@ -229,10 +229,10 @@ class Module {
     // This check is necessary because a module is ALWAYS instantiated, even
     // the top one. The instantiation is only removed afterwards.
     if (clk)
-      io("clk") <<= clk;
+      io("clock") <<= clk;
 
     if (rst)
-      io("rst") <<= rst;
+      io("reset") <<= rst;
   }
 
   template <class...Args>
@@ -256,12 +256,12 @@ public:
     // insert clock and reset port
     this->ports.insert(
       this->ports.begin(),
-      Port("rst", true, bitType())
+      Port("reset", true, bitType())
     );
 
     this->ports.insert(
       this->ports.begin(),
-      Port("clk", true, ClockType::get(firpContext()->context()))
+      Port("clock", true, ClockType::get(firpContext()->context()))
     );
 
     for (uint32_t i = 0; i < this->ports.size(); ++i)
@@ -342,10 +342,10 @@ class ExternalModule {
     // This check is necessary because a module is ALWAYS instantiated, even
     // the top one. The instantiation is only removed afterwards.
     if (clk)
-      io("clk") <<= clk;
+      io("clock") <<= clk;
 
     if (rst)
-      io("rst") <<= rst;
+      io("reset") <<= rst;
   }
 public:
   // All Args must be hashable.
@@ -358,12 +358,12 @@ public:
     // insert clock and reset port
     this->ports.insert(
       this->ports.begin(),
-      Port("rst", true, bitType())
+      Port("reset", true, bitType())
     );
 
     this->ports.insert(
       this->ports.begin(),
-      Port("clk", true, ClockType::get(firpContext()->context()))
+      Port("clock", true, ClockType::get(firpContext()->context()))
     );
 
     for (uint32_t i = 0; i < this->ports.size(); ++i)
