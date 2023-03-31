@@ -63,6 +63,7 @@ public:
 };
 
 class FirpContext {
+public:
   MLIRContext *ctxt;
   OpBuilder opBuilder;
   Value clock;
@@ -348,10 +349,11 @@ class ExternalModule {
   }
 public:
   // All Args must be hashable.
-  ExternalModule(const std::string& name, std::initializer_list<Port> ports):
+  template <class Container>
+  ExternalModule(const std::string& name, Container ports):
     hashValue(llvm::hash_value(name)),
     name(name),
-    ports(ports) {
+    ports(std::cbegin(ports), std::cend(ports)) {
 
     // insert clock and reset port
     this->ports.insert(
