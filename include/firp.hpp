@@ -112,6 +112,19 @@ IntType bitType();
 ClockType clockType();
 BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
 BundleType readyValidType(FIRRTLBaseType elementType);
+FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix);
+
+class ConnectResult {
+  bool successful;
+  std::string msg;
+public:
+  ConnectResult(): successful(true) {}
+  ConnectResult(const std::string& msg): successful(false), msg(msg) {}
+  std::string getMessage() const { return msg; }
+  operator bool() const { return successful; }
+  static ConnectResult success() { return ConnectResult(); }
+  static ConnectResult failure(const std::string& msg) { return ConnectResult(msg); }
+};
 
 class FValue : public Value {
 public:
@@ -140,7 +153,7 @@ public:
   // Every FValue can be connected to any other FValue. However, subsequent
   // processing stages might fail if for example types or directions do not
   // fit together!
-  void operator<<=(FValue other);
+  ConnectResult operator<<=(FValue other);
 
   FValue extend(size_t width);
 };
@@ -159,20 +172,31 @@ class Reg {
 public:
   Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name = "");
   Reg(FIRRTLBaseType type, const std::string& name = "");
+  // explicit read/write interfaces for cases where automatic type conversion fails
   FValue read() { return regOp.getResult(); }
-  void write(FValue what);
+  void write(FValue what) { FValue(regOp.getResult()) <<= what; }
+  operator FValue() { return read(); }
+  void operator<<=(FValue what) { write(what); }
 };
 
-// mainly used for naming things and easier debugging
+// mainly used for naming things to make debugging with GTKWave easier
 class Wire {
   WireOp wireOp;
   FIRRTLBaseType type;
 public:
   Wire(FIRRTLBaseType type, const std::string& name = "");
-  Wire(FValue what, const std::string& name = "");
-  operator FValue();
-  void operator<<=(FValue what);
+  // explicit read/write interfaces for cases where automatic type conversion fails
+  FValue read() { return wireOp.getResult(); }
+  void write(FValue what) { FValue(wireOp.getResult()) <<= what; }
+  operator FValue() { return read(); }
+  void operator<<=(FValue what) { write(what); }
 };
+
+// Chisel-like convenience functions
+Reg regNext(FValue what, const std::string& name = "");
+Reg regInit(FValue init, const std::string& name = "");
+Wire wireInit(FValue what, const std::string& name = "");
+FValue named(FValue what, const std::string& name);
 
 struct Port {
   std::string name;
@@ -414,9 +438,6 @@ public:
 };
 
 Conditional when(FValue cond, Conditional::BodyCtor bodyCtor);
-
-BundleType memReadType(FIRRTLBaseType dataType, uint32_t addrBits);
-BundleType memWriteType(FIRRTLBaseType dataType, uint32_t addrBits);
 
 template <class ScalarType>
 inline std::enable_if_t<std::is_scalar_v<ScalarType>, ScalarType> clog2(const ScalarType& value) {

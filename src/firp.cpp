@@ -364,7 +364,13 @@ FValue FValue::operator()(const std::string& fieldName) {
   ).getResult();
 }
 
-void FValue::operator<<=(FValue other) {
+ConnectResult FValue::operator<<=(FValue other) {
+  // We use ConnectOp because it is more forgiving. Additionally, (in contrast to the spec)
+  // we allow bit widths to be truncated (use case: reg <<= reg + cons(1)).
+  // We make use of ConnectOp's verify() function to confirm the we did everything right.
+  // If not, we return some diagnostics to help the user.
+  // Our connection operator is designed to catch common mistakes early and be convenient,
+  // but should not be considered truly faithful to the spec!
   FValue src, dst;
 
   src = other;
@@ -377,21 +383,21 @@ void FValue::operator<<=(FValue other) {
     int32_t dstWidth = dstInt.getBitWidthOrSentinel();
     int32_t srcWidth = srcInt.getBitWidthOrSentinel();
 
-    if (dstWidth >= 0 && srcWidth) {
-      if (srcWidth < dstWidth)
-        src = other.extend(dstWidth); // truncate
-      else if (dstWidth < srcWidth)
-        src = other(dstWidth - 1, 0); // extend
-    }
-  } else if (getType() != other.getType()) {
-    llvm::outs() << "Connecting two different types together!\n";
+    // Truncate!
+    if (dstWidth >= 0 && (srcWidth > dstWidth || srcWidth < 0))
+      src = other(dstWidth - 1, 0);
   }
 
-  firpContext()->builder().create<StrictConnectOp>(
+  ConnectOp connectOp = firpContext()->builder().create<ConnectOp>(
     firpContext()->builder().getUnknownLoc(),
     dst,
     src
   );
+
+  if (succeeded(connectOp.verify()))
+    return ConnectResult::success();
+  else
+    return ConnectResult::failure("Could not connect values! Please check your code and the spec.");
 }
 
 FValue FValue::extend(size_t width) {
@@ -418,23 +424,6 @@ Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(
 Reg::Reg(FIRRTLBaseType type, const std::string& name):
   Reg(type, zeros(type), name) {}
 
-void Reg::write(FValue what) {
-  FValue input = what;
-
-  // helps to simplify expressions such as reg.write(reg.read() + cons(1))
-  if (llvm::dyn_cast<IntType>(type) && llvm::dyn_cast<IntType>(what.getType())) {
-    int32_t hi = type.getBitWidthOrSentinel() - 1;
-    assert(hi >= 0);
-    input = what(hi, 0);
-  }
-
-  firpContext()->builder().create<StrictConnectOp>(
-    firpContext()->builder().getUnknownLoc(),
-    regOp,
-    input
-  );
-}
-
 Wire::Wire(FIRRTLBaseType type, const std::string& name) {
   wireOp = firpContext()->builder().create<WireOp>(
     firpContext()->builder().getUnknownLoc(),
@@ -443,21 +432,30 @@ Wire::Wire(FIRRTLBaseType type, const std::string& name) {
   );
 }
 
-Wire::Wire(FValue what, const std::string& name):
-  Wire(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name) {
-  *this <<= what;
+Reg regNext(FValue what, const std::string& name) {
+  Reg reg(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name);
+  reg <<= what;
+  return reg;
 }
 
-Wire::operator FValue() {
-  return wireOp.getResult();
+Reg regInit(FValue init, const std::string& name) {
+  Reg reg(llvm::dyn_cast<FIRRTLBaseType>(init.getType()), init, name);
+  return reg;
 }
 
-void Wire::operator<<=(FValue what) {
-  firpContext()->builder().create<StrictConnectOp>(
+Wire wireInit(FValue what, const std::string& name) {
+  Wire wire(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name);
+  wire <<= what;
+  return wire;
+}
+
+FValue named(FValue what, const std::string& name) {
+  return firpContext()->builder().create<NodeOp>(
     firpContext()->builder().getUnknownLoc(),
-    wireOp,
-    what
-  );
+    what.getType(),
+    what,
+    firpContext()->builder().getStringAttr(name)
+  ).getResult();
 }
 
 void Conditional::build(size_t i, OpBuilder builder) {
@@ -543,29 +541,30 @@ BundleType readyValidType(FIRRTLBaseType elementType) {
   });
 }
 
-BundleType memReadType(FIRRTLBaseType dataType, uint32_t addrBits) {
-  return bundleType({
-    {"addr", false, uintType(addrBits)},
-    {"en", false, bitType()},
-    {"clk", false, ClockType::get(firpContext()->context())},
-    {"data", true, dataType}
-  });
-}
+/*
+FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix) {  
+  BundleType bundleType = llvm::dyn_cast<BundleType>(type);
 
-BundleType memWriteType(FIRRTLBaseType dataType, uint32_t addrBits) {
-  //int32_t bitWidth = dataType.getBitWidthOrSentinel();  
-  //assert(bitWidth >= 0 && "cannot have uninferred widths in memory port type");
-  //assert(bitWidth % 8 == 0 && "bit width must be divisible by 8");
-  int32_t maskBits = 1; //bitWidth / 8;
+  if (!bundleType)
+    return type;
 
-  return bundleType({
-    {"addr", false, uintType(addrBits)},
-    {"en", false, bitType()},
-    {"clk", false, ClockType::get(firpContext()->context())},
-    {"data", false, dataType},
-    {"mask", false, uintType(maskBits)}
-  });
-}
+  std::vector<BundleType::BundleElement> newElements;
+
+  for (const auto& el : bundleType.getElements()) {
+    FIRRTLBaseType flattened = flattenType(el.type);
+    BundleType bundleType = llvm::dyn_cast<BundleType>(flattened);
+
+    if (!bundleType) {
+      newElements.emplace_back(el.name, el.isFlip, flattened);
+      continue;
+    }
+
+    for (const auto& flattenedEl : flattened.getElements())
+      newElements.emplace_back(el.name + infix + flattenedEl.name, flattenedEl.isFlip, flattenedEl.type);
+  }
+
+  return bundleType(newElements);
+}*/
 
 Memory::Memory(FIRRTLBaseType dataType, size_t depth): dataType(dataType) {
   //size_t addrBits = clog2(depth - 1);

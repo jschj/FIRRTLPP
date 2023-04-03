@@ -2,8 +2,10 @@
 #include "firp.hpp"
 #include "firpQueue.hpp"
 #include "AXIStream.hpp"
+#include "AXI4.hpp"
 
 using namespace firp;
+using namespace axi4;
 
 class ExternalQueue : public ExternalModule<ExternalQueue> {
 public:
@@ -19,27 +21,15 @@ public:
 
 class MyTop : public Module<MyTop> {
 public:
-  MyTop():
+  MyTop(const AXI4Config& config):
     Module<MyTop>(
       "MyTop",
       {
-
+        {"AXI", true, axi4Type(config, config)}
       }
     ) {}
 
   void body() {
-    ExternalQueue q1;
-    ExternalQueue q2;
-
-    q1.io("enq")("valid") <<= io("reset");
-    q1.io("enq")("bits") <<= cons(0, uintType(32));
-    q1.io("deq")("ready") <<= io("reset");
-
-    q2.io("enq")("valid") <<= io("reset");
-    q2.io("enq")("bits") <<= cons(0, uintType(32));
-    q2.io("deq")("ready") <<= io("reset");
-
-    FirpQueue q3(uintType(32), 5);
   }
 };
 
@@ -62,7 +52,8 @@ int main(int argc, const char **argv) {
   //auto firpQueue = FirpQueue(uintType(32), 5);
   //firpQueue.makeTop();
 
-  MyTop myTop;
+  AXI4Config config;
+  MyTop myTop(config);
   myTop.makeTop();
 
   firpContext()->finish();
