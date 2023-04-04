@@ -32,13 +32,15 @@
 #include "llvm/ADT/DenseMap.h"
 
 
-namespace llvm {
-
-hash_code hash_value(const ::circt::firrtl::BundleType::BundleElement& element);
-hash_code hash_value(const ::circt::firrtl::FIRRTLBaseType& type);
+namespace firp {
 
 template <class T>
-std::enable_if_t<std::negation_v<std::is_integral<T>>, hash_code> hash_value(const T&);
+std::enable_if_t<!std::is_integral_v<T>, llvm::hash_code> compute_hash(const T&);
+
+template <class T>
+std::enable_if_t<std::is_integral_v<T>, llvm::hash_code> compute_hash(const T& t) {
+  return llvm::hash_value(t);
+}
 
 }
 
@@ -272,7 +274,7 @@ class Module {
 
   template <class...Args>
   static llvm::hash_code computeModuleHash(const std::string& name, const Args&...args) {
-    auto codes = std::make_tuple(llvm::hash_value(args)...);
+    auto codes = std::make_tuple(compute_hash(args)...);
 
     return llvm::hash_combine(
       name,

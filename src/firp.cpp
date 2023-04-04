@@ -1,40 +1,16 @@
 #include "firp.hpp"
 
 
-namespace llvm {
+namespace firp {
 
-hash_code hash_value(const ::circt::firrtl::BundleType::BundleElement& element) {
-  return hash_combine(
-    element.name,
-    element.isFlip,
-    element.type
-  );
+template <>
+llvm::hash_code compute_hash(const std::string& s) {
+  return llvm::hash_value(s);
 }
 
-hash_code hash_value(const ::circt::firrtl::FIRRTLBaseType& type) {
-  using namespace ::circt::firrtl;
-
-  return TypeSwitch<FIRRTLBaseType, hash_code>(type)
-    .Case<IntType>([](IntType type){
-      return hash_combine(
-        type.getWidthOrSentinel(),
-        type.isSigned()
-      );
-    })
-    .Case<BundleType>([](BundleType type){
-      std::vector<hash_code> codes;
-      for (const auto& el : type.getElements())
-        codes.push_back(hash_value(el));
-
-      return hash_combine_range(
-        codes.begin(),
-        codes.end()
-      );
-    })
-    .Default([](FIRRTLBaseType){
-      assert(false && "type is unsupported");
-      return 0;
-    });
+template <>
+llvm::hash_code compute_hash(const circt::firrtl::FIRRTLBaseType& t) {
+  return mlir::hash_value(t);
 }
 
 }
@@ -80,6 +56,8 @@ FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(
   builder().setInsertionPointToStart(
     &root.getBodyRegion().front()
   );
+
+  return;
 
   circuitOp = builder().create<CircuitOp>(
     builder().getUnknownLoc(),
@@ -530,7 +508,7 @@ BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTL
       firpContext()->builder().getStringAttr(name), flip, type
     ));
 
-  return BundleType::get(els, firpContext()->context());
+  return BundleType::get(firpContext()->context(), els);
 }
 
 BundleType readyValidType(FIRRTLBaseType elementType) {

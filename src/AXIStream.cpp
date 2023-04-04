@@ -92,11 +92,11 @@ void AXIStreamTest::body(const AXIStreamConfig& config) {
 
 }
 
-namespace llvm {
+namespace firp {
 
 template <>
-hash_code hash_value(const firp::axis::AXIStreamConfig& config) {
-  return hash_combine(
+llvm::hash_code compute_hash(const firp::axis::AXIStreamConfig& config) {
+  return llvm::hash_combine(
     config.dataBits,
     config.userBits,
     config.destBits,
