@@ -3,27 +3,6 @@
 
 namespace firp::esi {
 
-template <class IOFunc>
-static void connect(FValue wire, bool isInput, const std::string& stem, IOFunc io) {
-  if (IntType intType = wire.getType().dyn_cast<IntType>()) {
-    // If wire is a primitive type we are done. Then we connect the stem
-    // (such as "deq_valid") to the wire directly.
-    if (isInput)
-      io(stem) <<= wire;
-    else
-      wire <<= io(stem);
-
-  } else if (BundleType bundleType = wire.getType().dyn_cast<BundleType>()) {
-    // If wire is a bundle type we need to iterate over its components.
-    for (const BundleType::BundleElement& el : bundleType) {
-      std::string newStem = stem + "_" + el.name.str();
-      connect(wire(el.name.str()), isInput != el.isFlip, newStem, io);
-    }
-  } else {
-    assert(false);
-  }
-}
-
 Type lowerFIRRTLType(FIRRTLBaseType type) {
   assert(type.isPassive() && "type must have no direction");
 

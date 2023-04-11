@@ -18,8 +18,6 @@ namespace firp::esi {
 // previously described with FIRRTLPP.
 Type lowerFIRRTLType(FIRRTLBaseType type);
 
-void unwrapAndConnect(circt::hw::HWModuleOp dst, circt::esi::ChannelType srcChan);
-
 template <class ConcreteModule>
 class ExternalHWModule {
   llvm::hash_code hashValue;
@@ -103,7 +101,6 @@ public:
 // We need a way to make a bundle type primitive so that it survives --lower-firrtl-types.
 
 std::vector<Port> toPrimitivePorts(const std::string& stemName, bool isInput, FIRRTLBaseType type);
-void primitiveConnect(Value dst, Value src);
 
 template <class ConcreteModule>
 class ESIModule : public ExternalModule<ConcreteModule> {
