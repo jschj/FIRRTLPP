@@ -97,4 +97,84 @@ public:
   }
 };
 
+// Lowering FIRRTL to HW poses the following problem: Aggregate types with
+// flipped fields can only be lowered to unidirectional types. Therefore,
+// all types are broken down to ground types (--lower-firrtl-types).
+// We need a way to make a bundle type primitive so that it survives --lower-firrtl-types.
+
+std::vector<Port> toPrimitivePorts(const std::string& stemName, bool isInput, FIRRTLBaseType type);
+void primitiveConnect(Value dst, Value src);
+
+template <class ConcreteModule>
+class ESIModule : public ExternalModule<ConcreteModule> {
+protected:
+  FIRRTLBaseType highType;
+  std::string uniqueName;
+
+  void connect(FValue wire, bool isInput, const std::string& stem) {
+    if (IntType intType = wire.getType().dyn_cast<IntType>()) {
+      // If wire is a primitive type we are done. Then we connect the stem
+      // (such as "deq_valid") to the wire directly.
+      if (isInput)
+        ExternalModule<ConcreteModule>::io(stem) <<= wire;
+      else
+        wire <<= ExternalModule<ConcreteModule>::io(stem);
+
+    } else if (BundleType bundleType = wire.getType().dyn_cast<BundleType>()) {
+      // If wire is a bundle type we need to iterate over its components.
+      for (const BundleType::BundleElement& el : bundleType) {
+        std::string newStem = stem + "_" + el.name.str();
+        connect(wire(el.name.str()), isInput != el.isFlip, newStem);
+      }
+    } else {
+      assert(false);
+    }
+  }
+
+public:
+  ESIModule(const std::string& baseName, FIRRTLBaseType highType, const std::string& portBaseName, bool isInput):
+    ExternalModule<ConcreteModule>(
+      baseName + "_" + std::to_string(mlir::hash_value(highType)),
+      toPrimitivePorts(portBaseName, isInput, highType)
+    ),
+    highType(highType),
+    uniqueName(baseName + "_" + std::to_string(mlir::hash_value(highType))) {}
+
+  std::string getUniqueName() const {
+    return uniqueName;
+  }
+};
+
+class ESIReceiver : public ESIModule<ESIReceiver> {
+public:
+  ESIReceiver(FIRRTLBaseType innerType):
+    ESIModule<ESIReceiver>(
+      "ESIReceiver",
+      readyValidType(innerType),
+      "deq",
+      false
+    ) {}
+
+  // We provide a custom implementation of io() because we have broken up the nice
+  // bundle into its primitive components but still want to retain a high level
+  // interface.
+  FValue io(const std::string& name);
+};
+
+class ESISender : public ESIModule<ESISender> {
+public:
+  ESISender(FIRRTLBaseType innerType):
+    ESIModule<ESISender>(
+      "ESISender",
+      readyValidType(innerType),
+      "enq",
+      true
+    ) {}
+
+  // We provide a custom implementation of io() because we have broken up the nice
+  // bundle into its primitive components but still want to retain a high level
+  // interface.
+  FValue io(const std::string& name);
+};
+
 }

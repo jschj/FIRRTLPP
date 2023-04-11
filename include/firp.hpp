@@ -106,7 +106,7 @@ FirpContext *firpContext();
 void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule);
 void initFirpContext(ModuleOp root, const std::string& topModule);
 
-// conventient type constructors
+// conventient type functions
 
 IntType uintType();
 IntType uintType(uint32_t bitWidth);
@@ -167,6 +167,7 @@ FValue mux(FValue sel, std::initializer_list<FValue> options);
 FValue zeros(FIRRTLBaseType type);
 FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
+FValue clockToInt(FValue clock);
 
 class Reg {
   RegResetOp regOp;

@@ -245,6 +245,13 @@ FValue doesFire(FValue readyValidValue) {
   return readyValidValue("valid") & readyValidValue("ready");
 }
 
+FValue clockToInt(FValue clock) {
+  return firpContext()->builder().create<AsUIntPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    clock
+  ).getResult();
+}
+
 FValue FValue::operator~() {
   return firpContext()->builder().create<NotPrimOp>(firpContext()->builder().getUnknownLoc(), *this).getResult();
 }
@@ -362,7 +369,7 @@ ConnectResult FValue::operator<<=(FValue other) {
     int32_t srcWidth = srcInt.getBitWidthOrSentinel();
 
     // Truncate!
-    if (dstWidth >= 0 && (srcWidth > dstWidth || srcWidth < 0))
+    if (dstWidth >= 0 && srcWidth > dstWidth)
       src = other(dstWidth - 1, 0);
   }
 
