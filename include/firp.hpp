@@ -168,6 +168,23 @@ FValue zeros(FIRRTLBaseType type);
 FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
 FValue clockToInt(FValue clock);
+FValue cat(std::initializer_list<FValue> values);
+
+template <class Container>
+FValue cat(Container values) {
+  assert(values.size() > 0 && "cat is not defined for 0 arguments");
+
+  FValue lhs = *values.begin();
+
+  // skip the first one
+  for (auto it = values.begin() + 1; it != values.end(); ++it)
+    lhs = firpContext()->builder().create<CatPrimOp>(
+      firpContext()->builder().getUnknownLoc(),
+      lhs, *it
+    ).getResult();
+
+  return lhs;  
+}
 
 class Reg {
   RegResetOp regOp;
@@ -422,6 +439,10 @@ public:
   FValue io(const std::string& name) {
     // Connection always happens from outside with external modules.
     return instOp.getResults()[portIndices.at(name)];
+  }
+
+  StringRef getInstanceName() {
+    return instOp.getName();
   }
 };
 

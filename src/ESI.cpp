@@ -66,6 +66,10 @@ FValue ESIReceiver::io(const std::string& name) {
   if (name != "deq")
     return ExternalModule<ESIReceiver>::io(name);
 
+  assert(false && "not implemented");
+
+  // TODO: I think the Wire causes a "'hw.struct_extract' op used as connect destination" error.
+
   // We need this weird wire construction because bundlecreate does not seem to preserve flow.
   FValue wire = Wire(highType);
   connect(wire, false, "deq");
@@ -75,6 +79,8 @@ FValue ESIReceiver::io(const std::string& name) {
 FValue ESISender::io(const std::string& name) {
   if (name != "enq")
     return ExternalModule<ESISender>::io(name);
+
+  assert(false && "not implemented");
 
   // We need this weird wire construction because bundlecreate does not seem to preserve flow.
   FValue wire = Wire(highType);

@@ -15,7 +15,7 @@ namespace firp::esi {
 // The way the lowering passes for FIRRTL -> HW are designed forces that all 
 
 // This is useful when you want to connect a ESI channel to a module that you
-// previously described with FIRRTLPP.
+// previously described with FIRRTLPP. Returns a HW type.
 Type lowerFIRRTLType(FIRRTLBaseType type);
 
 template <class ConcreteModule>
@@ -102,6 +102,22 @@ public:
 
 std::vector<Port> toPrimitivePorts(const std::string& stemName, bool isInput, FIRRTLBaseType type);
 
+// We break down composite types into their primitive parts when defining the io
+// ports of modules. We do this because primitive types survive the lowering pass
+// to HW and we need this predictable behaviour to make them work with ESI.
+// On the other hand we cannot bundle them back together and provide sub field
+// accesss as this is not supported for writing. This class should provide a
+// way of performing "virtual" sub field access akin to the usual .io("...")
+// known from normal modules.
+class ConnectionHelperObject {
+  FIRRTLBaseType type;
+  
+public:
+  ConnectionHelperObject operator()(const std::string& fieldName);
+  operator FValue();
+  void operator<<=(FValue what);
+};
+
 template <class ConcreteModule>
 class ESIModule : public ExternalModule<ConcreteModule> {
 protected:
@@ -128,6 +144,8 @@ protected:
     }
   }
 
+  static Type uintType(uint32_t bitWidth);
+
 public:
   ESIModule(const std::string& baseName, FIRRTLBaseType highType, const std::string& portBaseName, bool isInput):
     ExternalModule<ConcreteModule>(
@@ -142,7 +160,11 @@ public:
   }
 };
 
+// hw.module.extern @ESIReceiver_390360(%clock: i1, %reset: i1, %deq_ready: i1) -> (deq_valid: i1, deq_bits_bits: i40, deq_bits_last: i1)
+// hw.module.extern @ESISender_390360(%clock: i1, %reset: i1, %enq_valid: i1, %enq_bits_bits: i40, %enq_bits_last: i1) -> (enq_ready: i1)
+
 class ESIReceiver : public ESIModule<ESIReceiver> {
+  FIRRTLBaseType innerType;
 public:
   ESIReceiver(FIRRTLBaseType innerType):
     ESIModule<ESIReceiver>(
@@ -150,7 +172,8 @@ public:
       readyValidType(innerType),
       "deq",
       false
-    ) {}
+    ),
+    innerType(innerType) {}
 
   // We provide a custom implementation of io() because we have broken up the nice
   // bundle into its primitive components but still want to retain a high level
