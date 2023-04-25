@@ -77,11 +77,14 @@ public:
   std::stack<OpBuilder> builderStack;
   std::stack<Value> clockStack;
   std::stack<Value> resetStack;
+
+  std::string defaultClockName;
+  std::string defaultResetName;
 public:
   DeclaredModules declaredModules;
 
-  FirpContext(MLIRContext *ctxt, const std::string& topModule);
-  FirpContext(ModuleOp root, const std::string& topModule);
+  FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
 
   OpBuilder& builder() { return opBuilder; }
   MLIRContext *context() { return ctxt; }
@@ -100,11 +103,14 @@ public:
   void verify() {
     assert(succeeded(::mlir::verify(root.getOperation(), true)));
   }
+
+  std::string getDefaultClockName() const { return defaultClockName; }
+  std::string getDefaultResetName() const { return defaultResetName; }
 };
 
 FirpContext *firpContext();
-void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule);
-void initFirpContext(ModuleOp root, const std::string& topModule);
+void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
 
 // conventient type functions
 
@@ -284,10 +290,10 @@ class Module {
     // This check is necessary because a module is ALWAYS instantiated, even
     // the top one. The instantiation is only removed afterwards.
     if (clk)
-      io("clock") <<= clk;
+      io(firpContext()->getDefaultClockName()) <<= clk;
 
     if (rst)
-      io("reset") <<= rst;
+      io(firpContext()->getDefaultResetName()) <<= rst;
   }
 
   template <class...Args>
@@ -301,8 +307,8 @@ class Module {
   }
 public:
   // All Args must be hashable.
-  template <class...Args>
-  Module(const std::string& name, std::initializer_list<Port> ports, Args&&...args):
+  template <class Container = std::initializer_list<Port>, class...Args>
+  Module(const std::string& name, Container ports, Args&&...args):
     hashValue(computeModuleHash(name, args...)),
     baseName(name),
     name(name + "_" + std::to_string(hashValue)),
@@ -311,12 +317,12 @@ public:
     // insert clock and reset port
     this->ports.insert(
       this->ports.begin(),
-      Port("reset", true, bitType())
+      Port(firpContext()->getDefaultResetName(), true, bitType())
     );
 
     this->ports.insert(
       this->ports.begin(),
-      Port("clock", true, ClockType::get(firpContext()->context()))
+      Port(firpContext()->getDefaultClockName(), true, ClockType::get(firpContext()->context()))
     );
 
     for (uint32_t i = 0; i < this->ports.size(); ++i)
@@ -401,14 +407,14 @@ class ExternalModule {
     // This check is necessary because a module is ALWAYS instantiated, even
     // the top one. The instantiation is only removed afterwards.
     if (clk)
-      io("clock") <<= clk;
+      io(firpContext()->getDefaultClockName()) <<= clk;
 
     if (rst)
-      io("reset") <<= rst;
+      io(firpContext()->getDefaultResetName()) <<= rst;
   }
 public:
   // All Args must be hashable.
-  template <class Container>
+  template <class Container = std::initializer_list<Port>>
   ExternalModule(const std::string& name, Container ports):
     hashValue(llvm::hash_value(name)),
     name(name),
@@ -417,12 +423,12 @@ public:
     // insert clock and reset port
     this->ports.insert(
       this->ports.begin(),
-      Port("reset", true, bitType())
+      Port(firpContext()->getDefaultResetName(), true, bitType())
     );
 
     this->ports.insert(
       this->ports.begin(),
-      Port("clock", true, ClockType::get(firpContext()->context()))
+      Port(firpContext()->getDefaultClockName(), true, ClockType::get(firpContext()->context()))
     );
 
     for (uint32_t i = 0; i < this->ports.size(); ++i)

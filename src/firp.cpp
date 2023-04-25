@@ -48,7 +48,8 @@ FExtModuleOp DeclaredModules::getExternalDeclared(llvm::hash_code hashValue) {
   return externalDeclaredModules[hashValue];
 }
 
-FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(ctxt), opBuilder(ctxt) {
+FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
+  ctxt(ctxt), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName) {
   root = builder().create<ModuleOp>(
     builder().getUnknownLoc()
   );
@@ -67,7 +68,8 @@ FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule): ctxt(
   opBuilder = circuitOp.getBodyBuilder();
 }
 
-FirpContext::FirpContext(ModuleOp root, const std::string& topModule): ctxt(root.getContext()), opBuilder(ctxt) {
+FirpContext::FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
+  ctxt(root.getContext()), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName) {
   this->root = root;
 
   builder().setInsertionPointToStart(
@@ -154,12 +156,12 @@ FirpContext *firpContext() {
   return ctxt.get();
 }
 
-void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule) {
-  ctxt = std::make_unique<FirpContext>(mlirCtxt, topModule);
+void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
+  ctxt = std::make_unique<FirpContext>(mlirCtxt, topModule, defaultClockName, defaultResetName);
 }
 
-void initFirpContext(ModuleOp root, const std::string& topModule) {
-  ctxt = std::make_unique<FirpContext>(root, topModule);
+void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
+  ctxt = std::make_unique<FirpContext>(root, topModule, defaultClockName, defaultResetName);
 }
 
 FValue lift(Value val) {
