@@ -16,7 +16,7 @@ llvm::hash_code compute_hash(const circt::firrtl::FIRRTLBaseType& t) {
 }
 
 namespace firp {
-
+/*
 bool DeclaredModules::isDeclared(llvm::hash_code hashValue) {
   return declaredModules.find(hashValue) != declaredModules.end() ||
     externalDeclaredModules.find(hashValue) != externalDeclaredModules.end();
@@ -47,9 +47,27 @@ void DeclaredModules::addDeclared(llvm::hash_code hashValue, FExtModuleOp decl) 
 FExtModuleOp DeclaredModules::getExternalDeclared(llvm::hash_code hashValue) {
   return externalDeclaredModules[hashValue];
 }
+ */
+void ModuleBuilder::build() {
+  // call all the body constructors
+  for (const Constructable& constructable : constructables) {
+    FModuleOp modOp = constructable.modOp;
+
+    Value newClock = modOp.getBodyBlock()->getArguments()[0];
+    Value newReset = modOp.getBodyBlock()->getArguments()[1];
+    OpBuilder newBuilder = modOp.getBodyBuilder();
+
+    firpContext()->beginContext(newClock, newReset, newBuilder);
+    inModuleDefinition = true;
+    constructable.bodyCtor();
+    inModuleDefinition = false;
+    firpContext()->endContext();
+  }
+}
 
 FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
-  ctxt(ctxt), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName) {
+  ctxt(ctxt), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName),
+  moduleBuilder(std::make_unique<ModuleBuilder>()) {
   root = builder().create<ModuleOp>(
     builder().getUnknownLoc()
   );
@@ -69,7 +87,8 @@ FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const 
 }
 
 FirpContext::FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
-  ctxt(root.getContext()), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName) {
+  ctxt(root.getContext()), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName),
+  moduleBuilder(std::make_unique<ModuleBuilder>()) {
   this->root = root;
 
   builder().setInsertionPointToStart(
@@ -274,75 +293,51 @@ FValue FValue::operator~() {
 }
 
 FValue FValue::operator+(FValue other) {
-  return lift(
-    firpContext()->builder().create<AddPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<AddPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator-(FValue other) {
-  return lift(
-    firpContext()->builder().create<SubPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<SubPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator*(FValue other) {
-  return lift(
-    firpContext()->builder().create<MulPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<MulPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator/(FValue other) {
-  return lift(
-    firpContext()->builder().create<DivPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<DivPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator&(FValue other) {
-  return lift(
-    firpContext()->builder().create<AndPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<AndPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator|(FValue other) {
-  return lift(
-    firpContext()->builder().create<OrPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<OrPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator>(FValue other) {
-  return lift(
-    firpContext()->builder().create<GTPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<GTPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator>=(FValue other) {
-  return lift(
-    firpContext()->builder().create<GEQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<GEQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator<(FValue other) {
-  return lift(
-    firpContext()->builder().create<LTPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<LTPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator<=(FValue other) {
-  return lift(
-    firpContext()->builder().create<LEQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<LEQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator==(FValue other) {
-  return lift(
-    firpContext()->builder().create<EQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<EQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator!=(FValue other) {
-  return lift(
-    firpContext()->builder().create<NEQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult()
-  );
+  return firpContext()->builder().create<NEQPrimOp>(firpContext()->builder().getUnknownLoc(), *this, other).getResult();
 }
 
 FValue FValue::operator()(size_t hi, size_t lo) {

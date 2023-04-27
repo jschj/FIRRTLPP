@@ -49,6 +49,7 @@ namespace firp {
 using namespace ::mlir;
 using namespace ::circt::firrtl;
 
+/*
 class DeclaredModules {
   llvm::DenseMap<llvm::hash_code, FModuleOp> declaredModules;
   std::optional<llvm::hash_code> topMod;
@@ -63,6 +64,9 @@ public:
   void addDeclared(llvm::hash_code hashValue, FExtModuleOp decl);
   FExtModuleOp getExternalDeclared(llvm::hash_code hashValue);
 };
+ */
+
+class ModuleBuilder;
 
 class FirpContext {
 public:
@@ -81,7 +85,8 @@ public:
   std::string defaultClockName;
   std::string defaultResetName;
 public:
-  DeclaredModules declaredModules;
+  //DeclaredModules declaredModules;
+  std::unique_ptr<ModuleBuilder> moduleBuilder;
 
   FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
   FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
@@ -112,7 +117,71 @@ FirpContext *firpContext();
 void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
 void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
 
-// conventient type functions
+class ModuleBuilder {
+public:
+  typedef std::function<void()> BodyCtor;
+private:
+  struct Constructable {    
+    FModuleOp modOp;
+    BodyCtor bodyCtor;
+  };
+
+  std::vector<Constructable> constructables;
+
+  bool inModuleDefinition = false;
+public:
+  // add a normal module
+  template <class PortsT, class...Args>
+  void addModule(PortsT ports, BodyCtor bodyCtor, const std::string& baseName, Args&&...args) {
+    // This function is instantiated for every unique combination of arg types.
+    static llvm::DenseMap<std::tuple<std::string, Args...>, FModuleOp> moduleOps;
+    static uint32_t uid = 0;
+
+    auto sig = std::make_tuple(baseName, args...);
+
+    // module has already been declared
+    auto it = moduleOps.find(sig);
+
+    if (it != moduleOps.end())
+      return *it;
+
+    std::string fullName = baseName + "_" + std::to_string(uid++);
+
+    // declare module
+    std::vector<PortInfo> portInfos;
+    for (const Port& port : ports)
+      portInfos.emplace_back(
+        firpContext()->builder().getStringAttr(port.name),
+        port.type,
+        port.isInput ? Direction::In : Direction::Out
+      );
+    
+    firpContext()->beginModuleDeclaration();
+
+    FModuleOp modOp = firpContext()->builder().create<FModuleOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(fullName),
+      portInfos
+    );
+
+    firpContext()->endModuleDeclaration();
+
+    moduleOps[sig] = modOp;
+
+    construbales.push_back(Constructable{
+      .modOp = modOp,
+      .bodyCtor = bodyCtor
+    });
+  }
+
+  void build();
+
+  bool isInModuleDefinition() const {
+    return inModuleDefinition;
+  }
+};
+
+// convenient type functions
 
 IntType uintType();
 IntType uintType(uint32_t bitWidth);
@@ -328,8 +397,12 @@ public:
     for (uint32_t i = 0; i < this->ports.size(); ++i)
       portIndices[this->ports[i].name] = i;
 
-    if (!firpContext()->declaredModules.isDeclared(hashValue))
-      declare(args...);
+    //if (!firpContext()->declaredModules.isDeclared(hashValue))
+    //  declare(args...);
+
+    firpContext()->moduleBuilder->addModule(this->ports, 
+      std::bind(ConcreteModule::build, static_cast<ConcreteModule *>(this)
+    ???, name, args...);
 
     modOp = firpContext()->declaredModules.getDeclared(hashValue);
 
@@ -342,6 +415,8 @@ public:
 
     // instOp != nullptr iff. it has already been declared!
     bool isFromOutside = instOp;
+
+    // TODO: Check ModuleBuilder::isInModuleDefinition
 
     if (isFromOutside)
       return instOp.getResults()[portIndices.at(name)];
