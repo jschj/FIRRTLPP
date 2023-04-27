@@ -48,21 +48,22 @@ FExtModuleOp DeclaredModules::getExternalDeclared(llvm::hash_code hashValue) {
   return externalDeclaredModules[hashValue];
 }
  */
-void ModuleBuilder::build() {
-  // call all the body constructors
-  for (const Constructable& constructable : constructables) {
-    FModuleOp modOp = constructable.modOp;
 
-    Value newClock = modOp.getBodyBlock()->getArguments()[0];
-    Value newReset = modOp.getBodyBlock()->getArguments()[1];
-    OpBuilder newBuilder = modOp.getBodyBuilder();
+void ModuleBuilder::build(uint32_t sigId) {
+  auto constructable = constructables[sigId];
+  FModuleOp modOp = constructable.modOp;
 
-    firpContext()->beginContext(newClock, newReset, newBuilder);
-    inModuleDefinition = true;
-    constructable.bodyCtor();
-    inModuleDefinition = false;
-    firpContext()->endContext();
-  }
+  Value newClock = modOp.getBodyBlock()->getArguments()[0];
+  Value newReset = modOp.getBodyBlock()->getArguments()[1];
+  OpBuilder newBuilder = modOp.getBodyBuilder();
+
+  firpContext()->beginContext(newClock, newReset, newBuilder);
+  inBodyOf = sigId;
+  constructable.bodyCtor();
+  inBodyOf = -1;
+  firpContext()->endContext();
+
+  constructed.insert(sigId);
 }
 
 FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
@@ -75,8 +76,6 @@ FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const 
   builder().setInsertionPointToStart(
     &root.getBodyRegion().front()
   );
-
-  return;
 
   circuitOp = builder().create<CircuitOp>(
     builder().getUnknownLoc(),
@@ -134,12 +133,16 @@ void FirpContext::endModuleDeclaration() {
 }
 
 void FirpContext::finish() {
+  assert(!moduleBuilder->hasUnfinishedConstructions() && "Some modules have not been constructed. Make sure their destructor is called before calling finish().");
+
   // Our top module currently has the name "MyTop_<some hash value>" whereas CircuitOp
   // is called MyTop. We construct a module named MyTop that wraps MyTop_<some hash value>.
 
   beginModuleDeclaration();
 
-  FModuleOp top = declaredModules.getTop();
+  FModuleOp top = moduleBuilder->getTop();
+  assert(top && "Top module not defined. Use makeTop() to set your top module.");
+
   FModuleOp wrapper = opBuilder.create<FModuleOp>(
     opBuilder.getUnknownLoc(),
     opBuilder.getStringAttr(circuitOp.getName()),

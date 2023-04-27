@@ -20,18 +20,21 @@ BundleType AXIStreamBundleType(const AXIStreamConfig& config);
 BundleType withLast(FIRRTLBaseType type);
 
 class AXIStreamReceiver : public Module<AXIStreamReceiver> {
+  AXIStreamConfig config;
 public:
   AXIStreamReceiver(const AXIStreamConfig& config);
-  void body(const AXIStreamConfig& config);
+  void body();
 };
 
 class AXIStreamSender : public Module<AXIStreamSender> {
+  AXIStreamConfig config;
 public:
   AXIStreamSender(const AXIStreamConfig& config);
-  void body(const AXIStreamConfig& config);
+  void body();
 };
 
 class AXIStreamTest : public Module<AXIStreamTest> {
+  AXIStreamConfig config;
 public:
   AXIStreamTest(const AXIStreamConfig& config):
     Module<AXIStreamTest>(
@@ -40,10 +43,10 @@ public:
         Port("SLAVE", true, AXIStreamBundleType(config)),
         Port("MASTER", false, AXIStreamBundleType(config))
       },
-      config
+      config.dataBits, config.userBits, config.destBits, config.idBits
     ) {}
 
-  void body(const AXIStreamConfig& config);
+  void body();
 };
 
 }

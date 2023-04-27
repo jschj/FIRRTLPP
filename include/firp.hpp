@@ -3,6 +3,7 @@
 #include <memory>
 #include <stack>
 #include <functional>
+#include <unordered_map>
 
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
@@ -41,6 +42,35 @@ template <class T>
 std::enable_if_t<std::is_integral_v<T>, llvm::hash_code> compute_hash(const T& t) {
   return llvm::hash_value(t);
 }
+
+}
+
+namespace llvm {
+
+// essentially boils down to bit converting double to uint64_t
+template<> struct DenseMapInfo<double> {
+  static_assert(sizeof(double) == sizeof(uint64_t));
+
+  static inline double getEmptyKey() {
+    const uint64_t c = ~0ULL;
+    return *reinterpret_cast<const double *>(&c);
+  }
+
+  static inline double getTombstoneKey() {
+    const uint64_t c = ~0ULL - 1ULL;
+    return *reinterpret_cast<const double *>(&c);
+  }
+
+  static unsigned getHashValue(const double& Val) {
+    return (unsigned)(*reinterpret_cast<const uint64_t *>(&Val) * 37ULL);
+  }
+
+  static bool isEqual(const double &LHS, const double &RHS) {
+    // standard floating point comparisons can get a little whacky
+    return *reinterpret_cast<const uint64_t *>(&LHS) ==
+      *reinterpret_cast<const uint64_t *>(&RHS);
+  }
+};
 
 }
 
@@ -121,35 +151,57 @@ class ModuleBuilder {
 public:
   typedef std::function<void()> BodyCtor;
 private:
+  // normal modules
   struct Constructable {    
     FModuleOp modOp;
     BodyCtor bodyCtor;
   };
 
-  std::vector<Constructable> constructables;
+  llvm::DenseMap<uint32_t, Constructable> constructables;
+  llvm::DenseSet<uint32_t> constructed;
 
-  bool inModuleDefinition = false;
+  // external modules
+  llvm::DenseMap<uint32_t, FExtModuleOp> extModules;
+
+  // all the rest
+  uint32_t inBodyOf = -1;
+  uint32_t uid = 0;
+  FModuleOp topOp;
 public:
+  // All args must implement DenseMapInfo. Use StringRef instead of std::string.
+  template <class...Args>
+  uint32_t getSignatureId(Args...args) {
+    static llvm::DenseMap<std::tuple<Args...>, uint32_t> signatures;
+
+    auto sig = std::make_tuple(args...);
+    auto it = signatures.find(sig);
+
+    if (it != signatures.end())
+      return it->second;
+
+    uint32_t id = uid++;
+    signatures[sig] = id;
+
+    return id;
+  }
+
   // add a normal module
   template <class PortsT, class...Args>
-  void addModule(PortsT ports, BodyCtor bodyCtor, const std::string& baseName, Args&&...args) {
+  std::tuple<uint32_t, FModuleOp> addModule(PortsT ports, BodyCtor bodyCtor, StringRef baseName, Args...args) {
     // This function is instantiated for every unique combination of arg types.
-    static llvm::DenseMap<std::tuple<std::string, Args...>, FModuleOp> moduleOps;
-    static uint32_t uid = 0;
+    uint32_t sigId = getSignatureId(baseName, args...);
 
-    auto sig = std::make_tuple(baseName, args...);
+    // check if module has already been declared
+    auto it = constructables.find(sigId);
 
-    // module has already been declared
-    auto it = moduleOps.find(sig);
+    if (it != constructables.end())
+      return std::make_tuple(it->first, it->second.modOp);
 
-    if (it != moduleOps.end())
-      return *it;
-
-    std::string fullName = baseName + "_" + std::to_string(uid++);
+    std::string fullName = baseName.str() + "_" + std::to_string(sigId);
 
     // declare module
     std::vector<PortInfo> portInfos;
-    for (const Port& port : ports)
+    for (const auto& port : ports)
       portInfos.emplace_back(
         firpContext()->builder().getStringAttr(port.name),
         port.type,
@@ -166,18 +218,63 @@ public:
 
     firpContext()->endModuleDeclaration();
 
-    moduleOps[sig] = modOp;
-
-    construbales.push_back(Constructable{
+    constructables[sigId] = Constructable{
       .modOp = modOp,
       .bodyCtor = bodyCtor
-    });
+    };
+
+    return std::make_tuple(sigId, modOp);
   }
 
-  void build();
+  template <class PortsT>
+  std::tuple<uint32_t, FExtModuleOp> addExternalModule(StringRef baseName, PortsT ports) {
+    // An external module must have a signature and name that only depends on its base name.
+    uint32_t sigId = getSignatureId(baseName);
 
-  bool isInModuleDefinition() const {
-    return inModuleDefinition;
+    auto it = extModules.find(sigId);
+
+    if (it != extModules.end())
+      return std::make_tuple(it->first, it->second);
+
+    std::vector<PortInfo> portInfos;
+    for (const auto& port : ports)
+      portInfos.emplace_back(
+        firpContext()->builder().getStringAttr(port.name),
+        port.type,
+        port.isInput ? Direction::In : Direction::Out
+      );
+
+    firpContext()->beginModuleDeclaration();
+
+    FExtModuleOp modOp = firpContext()->builder().create<FExtModuleOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(baseName),
+      portInfos
+    );
+
+    firpContext()->endModuleDeclaration();
+
+    extModules[sigId] = modOp;
+
+    return std::make_tuple(sigId, modOp);
+  }
+
+  void build(uint32_t sigId);
+
+  bool isInBodyOf(uint32_t of) const {
+    return of == inBodyOf;
+  }
+
+  void setTop(uint32_t sigId) {
+    topOp = constructables[sigId].modOp;
+  }
+
+  FModuleOp getTop() {
+    return topOp;
+  }
+
+  bool hasUnfinishedConstructions() const {
+    return constructed.size() < constructables.size();
   }
 };
 
@@ -305,14 +402,15 @@ struct Port {
 
 template <class ConcreteModule>
 class Module {
-  llvm::hash_code hashValue;
   std::string baseName;
   std::string name;
   std::vector<Port> ports;
   std::unordered_map<std::string, uint32_t> portIndices;
+  uint32_t signatureId;
   FModuleOp modOp;
   InstanceOp instOp;
 
+  /*
   template <class...Args>
   void declare(Args&&...args) {
     std::vector<PortInfo> portInfos;
@@ -343,7 +441,7 @@ class Module {
     firpContext()->endContext();
 
     firpContext()->endModuleDeclaration();
-  }
+  }*/
 
   void instantiate() {
     instOp = firpContext()->builder().create<InstanceOp>(
@@ -364,23 +462,11 @@ class Module {
     if (rst)
       io(firpContext()->getDefaultResetName()) <<= rst;
   }
-
-  template <class...Args>
-  static llvm::hash_code computeModuleHash(const std::string& name, const Args&...args) {
-    auto codes = std::make_tuple(compute_hash(args)...);
-
-    return llvm::hash_combine(
-      name,
-      llvm::hash_value(codes)
-    );
-  }
 public:
   // All Args must be hashable.
   template <class Container = std::initializer_list<Port>, class...Args>
   Module(const std::string& name, Container ports, Args&&...args):
-    hashValue(computeModuleHash(name, args...)),
     baseName(name),
-    name(name + "_" + std::to_string(hashValue)),
     ports(ports) {
 
     // insert clock and reset port
@@ -397,26 +483,29 @@ public:
     for (uint32_t i = 0; i < this->ports.size(); ++i)
       portIndices[this->ports[i].name] = i;
 
-    //if (!firpContext()->declaredModules.isDeclared(hashValue))
-    //  declare(args...);
+    auto result = firpContext()->moduleBuilder->addModule(this->ports,
+      std::bind(&ConcreteModule::body, static_cast<ConcreteModule *>(this)),
+      StringRef(name), args...);
 
-    firpContext()->moduleBuilder->addModule(this->ports, 
-      std::bind(ConcreteModule::build, static_cast<ConcreteModule *>(this)
-    ???, name, args...);
+    signatureId = std::get<0>(result);
+    modOp = std::get<1>(result);
 
-    modOp = firpContext()->declaredModules.getDeclared(hashValue);
+    this->name = baseName + "_" + std::to_string(signatureId);
 
     instantiate();
+  }
+
+  virtual ~Module() {
+    // Doing construction here retains the natural hierarchy. Additionally, it ensures
+    // that the bound this pointer of the body constructor is still valid.
+    firpContext()->moduleBuilder->build(signatureId);
   }
 
   FValue io(const std::string& name) {
     // io() behaves differently depending on whether we are inside the currently
     // declared modules or are talking to the ports of an instance.
 
-    // instOp != nullptr iff. it has already been declared!
-    bool isFromOutside = instOp;
-
-    // TODO: Check ModuleBuilder::isInModuleDefinition
+    bool isFromOutside = !firpContext()->moduleBuilder->isInBodyOf(signatureId);
 
     if (isFromOutside)
       return instOp.getResults()[portIndices.at(name)];
@@ -426,7 +515,7 @@ public:
 
   void makeTop() {
     instOp.getOperation()->erase();
-    firpContext()->declaredModules.setTop(hashValue);
+    firpContext()->moduleBuilder->setTop(signatureId);
   }
 
   std::string getName() const {
@@ -440,33 +529,12 @@ public:
 
 template <class ConcreteModule>
 class ExternalModule {
-  llvm::hash_code hashValue;
   std::string name;
   std::vector<Port> ports;
   std::unordered_map<std::string, uint32_t> portIndices;
+  uint32_t signatureId;
   FExtModuleOp modOp;
   InstanceOp instOp;
-
-  void declare() {
-    std::vector<PortInfo> portInfos;
-    for (const Port& port : ports)
-      portInfos.emplace_back(
-        firpContext()->builder().getStringAttr(port.name),
-        port.type,
-        port.isInput ? Direction::In : Direction::Out
-      );
-
-    firpContext()->beginModuleDeclaration();
-
-    modOp = firpContext()->builder().create<FExtModuleOp>(
-      firpContext()->builder().getUnknownLoc(),
-      firpContext()->builder().getStringAttr(name),
-      portInfos
-    );
-
-    firpContext()->declaredModules.addDeclared(hashValue, modOp);
-    firpContext()->endModuleDeclaration();
-  }
 
   void instantiate() {
     instOp = firpContext()->builder().create<InstanceOp>(
@@ -491,7 +559,6 @@ public:
   // All Args must be hashable.
   template <class Container = std::initializer_list<Port>>
   ExternalModule(const std::string& name, Container ports):
-    hashValue(llvm::hash_value(name)),
     name(name),
     ports(std::cbegin(ports), std::cend(ports)) {
 
@@ -509,10 +576,9 @@ public:
     for (uint32_t i = 0; i < this->ports.size(); ++i)
       portIndices[this->ports[i].name] = i;
 
-    if (!firpContext()->declaredModules.isDeclared(hashValue))
-      declare();
-
-    modOp = firpContext()->declaredModules.getExternalDeclared(hashValue);
+    auto result = firpContext()->moduleBuilder->addExternalModule(StringRef(name), this->ports);
+    signatureId = std::get<0>(result);
+    modOp = std::get<1>(result);
 
     instantiate();
   }

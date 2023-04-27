@@ -3,7 +3,7 @@
 
 namespace firp {
 
-void ShiftRegister::body(FIRRTLBaseType elementType, size_t depth) {
+void ShiftRegister::body() {
   std::vector<Reg> regs;
 
   for (size_t i = 0; i < depth; ++i) {

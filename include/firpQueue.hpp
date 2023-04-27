@@ -6,6 +6,8 @@
 namespace firp {
 
 class FirpQueue : public Module<FirpQueue> {
+  FIRRTLBaseType elementType;
+  size_t depth = 0;
 public:
   FirpQueue(FIRRTLBaseType elementType, size_t depth):
     Module<FirpQueue>(
@@ -16,10 +18,10 @@ public:
         Port("count", false, uintType(clog2(depth)))
       },
       elementType, depth
-    ) {}
+    ), elementType(elementType), depth(depth) {}
   
-  void body(FIRRTLBaseType elementType, size_t depth) {
-    // This hack is easier than implementing simultaneous enqueu and dequeue logic.
+  void body() {
+    // This hack is easier than implementing simultaneous enqueue and dequeue logic.
     size_t ioCountBits = clog2(depth - 1);
     depth += 1;
     size_t indexBits = clog2(depth - 1);

@@ -6,6 +6,8 @@
 namespace firp {
 
 class ShiftRegister : public Module<ShiftRegister> {
+  FIRRTLBaseType elementType;
+  size_t depth;
 public:
   ShiftRegister(FIRRTLBaseType elementType, size_t depth):
     Module<ShiftRegister>(
@@ -15,9 +17,10 @@ public:
         Port("out", false, elementType)
       },
       elementType, depth
-    ) {}
+    ),
+    elementType(elementType), depth(depth) {}
 
-  void body(FIRRTLBaseType elementType, size_t depth);
+  void body();
 };
 
 /*

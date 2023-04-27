@@ -33,8 +33,8 @@ AXIStreamReceiver::AXIStreamReceiver(const AXIStreamConfig& config):
       Port("AXIS", true, AXIStreamBundleType(config)),
       Port("deq", false, readyValidType(withLast(uintType(config.dataBits))))
     },
-    config
-  ) {}
+    config.dataBits, config.userBits, config.destBits, config.idBits
+  ), config(config) {}
 
 AXIStreamSender::AXIStreamSender(const AXIStreamConfig& config):
   Module<AXIStreamSender>(
@@ -43,10 +43,10 @@ AXIStreamSender::AXIStreamSender(const AXIStreamConfig& config):
       Port("AXIS", false, AXIStreamBundleType(config)),
       Port("enq", true, readyValidType(withLast(uintType(config.dataBits))))
     },
-    config
-  ) {}
+    config.dataBits, config.userBits, config.destBits, config.idBits
+  ), config(config) {}
 
-void AXIStreamReceiver::body(const AXIStreamConfig& config) {
+void AXIStreamReceiver::body() {
   auto elType = withLast(uintType(config.dataBits));
   auto queue = FirpQueue(elType, 8);
 
@@ -59,7 +59,7 @@ void AXIStreamReceiver::body(const AXIStreamConfig& config) {
   io("deq") <<= queue.io("deq");
 }
 
-void AXIStreamSender::body(const AXIStreamConfig& config) {
+void AXIStreamSender::body() {
   auto elType = withLast(uintType(config.dataBits));
   auto queue = FirpQueue(elType, 8);
 
@@ -78,7 +78,7 @@ void AXIStreamSender::body(const AXIStreamConfig& config) {
   io("AXIS")("TID") <<= cons(0, uintType(config.idBits));
 }
 
-void AXIStreamTest::body(const AXIStreamConfig& config) {
+void AXIStreamTest::body() {
   auto receiver = AXIStreamReceiver(config);
   receiver.io("AXIS") <<= io("SLAVE");
 
@@ -94,14 +94,14 @@ void AXIStreamTest::body(const AXIStreamConfig& config) {
 
 namespace firp {
 
-template <>
-llvm::hash_code compute_hash(const firp::axis::AXIStreamConfig& config) {
-  return llvm::hash_combine(
-    config.dataBits,
-    config.userBits,
-    config.destBits,
-    config.idBits
-  );
-}
+//template <>
+//llvm::hash_code compute_hash(const firp::axis::AXIStreamConfig& config) {
+//  return llvm::hash_combine(
+//    config.dataBits,
+//    config.userBits,
+//    config.destBits,
+//    config.idBits
+//  );
+//}
 
 }
