@@ -291,6 +291,15 @@ FValue cat(std::initializer_list<FValue> values) {
   return lhs;  
 }
 
+FValue shiftRegister(FValue input, uint32_t delay) {
+  FValue result = input;
+
+  for (uint32_t i = 0; i < delay; ++i)
+    result = regNext(result);
+
+  return result;
+}
+
 FValue FValue::operator~() {
   return firpContext()->builder().create<NotPrimOp>(firpContext()->builder().getUnknownLoc(), *this).getResult();
 }
@@ -364,6 +373,52 @@ FValue FValue::operator()(const std::string& fieldName) {
   ).getResult();
 }
 
+FValue FValue::operator[](FValue index) {
+  return firpContext()->builder().create<SubaccessOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this,
+    index
+  ).getResult();
+}
+
+FValue FValue::operator<<(uint32_t amount) {
+  return firpContext()->builder().create<ShlPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this,
+    amount
+  ).getResult();
+}
+
+FValue FValue::operator>>(uint32_t amount) {
+  return firpContext()->builder().create<ShrPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this,
+    amount
+  ).getResult();
+}
+
+FValue FValue::operator<<(FValue amount) {
+  FValue result = *this;
+
+  for (uint32_t i = 0; i < amount.bitCount(); ++i) {
+    uint32_t amt = 1 << i;
+    result = mux(amount(i), result << amt, result);
+  }
+
+  return result;
+}
+
+FValue FValue::operator>>(FValue amount) {
+  FValue result = *this;
+
+  for (uint32_t i = 0; i < amount.bitCount(); ++i) {
+    uint32_t amt = 1 << i;
+    result = mux(amount(i), result >> amt, result);
+  }
+
+  return result;
+}
+
 ConnectResult FValue::operator<<=(FValue other) {
   // We use ConnectOp because it is more forgiving. Additionally, (in contrast to the spec)
   // we allow bit widths to be truncated (use case: reg <<= reg + cons(1)).
@@ -408,6 +463,14 @@ FValue FValue::extend(size_t width) {
     *this,
     firpContext()->builder().getI32IntegerAttr(width)
   ).getResult();
+}
+
+uint32_t FValue::bitCount() {
+  if (IntType intType = llvm::dyn_cast<IntType>(getType()))
+    if (int32_t w = intType.getBitWidthOrSentinel() != -1)
+      return uint32_t(w);
+
+  throw std::runtime_error("Type is not an int type or has unknown width!");
 }
 
 Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(type) {

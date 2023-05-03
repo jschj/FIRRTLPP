@@ -34,7 +34,7 @@ AXIStreamReceiver::AXIStreamReceiver(const AXIStreamConfig& config):
       Port("deq", false, readyValidType(withLast(uintType(config.dataBits))))
     },
     config.dataBits, config.userBits, config.destBits, config.idBits
-  ), config(config) {}
+  ), config(config) { build(); }
 
 AXIStreamSender::AXIStreamSender(const AXIStreamConfig& config):
   Module<AXIStreamSender>(
@@ -44,7 +44,7 @@ AXIStreamSender::AXIStreamSender(const AXIStreamConfig& config):
       Port("enq", true, readyValidType(withLast(uintType(config.dataBits))))
     },
     config.dataBits, config.userBits, config.destBits, config.idBits
-  ), config(config) {}
+  ), config(config) { build(); }
 
 void AXIStreamReceiver::body() {
   auto elType = withLast(uintType(config.dataBits));

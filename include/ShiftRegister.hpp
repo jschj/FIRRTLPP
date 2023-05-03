@@ -18,7 +18,7 @@ public:
       },
       elementType, depth
     ),
-    elementType(elementType), depth(depth) {}
+    elementType(elementType), depth(depth) { build(); }
 
   void body();
 };

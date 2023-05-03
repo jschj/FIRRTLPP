@@ -323,6 +323,12 @@ public:
   FValue operator()(size_t hi, size_t lo);
   FValue operator()(size_t index);
   FValue operator()(const std::string& fieldName);
+  FValue operator[](FValue index);
+
+  FValue operator<<(uint32_t amount);
+  FValue operator>>(uint32_t amount);
+  FValue operator<<(FValue amount);
+  FValue operator>>(FValue amount);
 
   // Every FValue can be connected to any other FValue. However, subsequent
   // processing stages might fail if for example types or directions do not
@@ -330,6 +336,8 @@ public:
   ConnectResult operator<<=(FValue other);
 
   FValue extend(size_t width);
+
+  uint32_t bitCount();
 };
 
 FValue lift(Value val);
@@ -341,6 +349,7 @@ FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
 FValue clockToInt(FValue clock);
 FValue cat(std::initializer_list<FValue> values);
+FValue shiftRegister(FValue input, uint32_t delay);
 
 template <class Container>
 FValue cat(Container values) {
@@ -356,6 +365,25 @@ FValue cat(Container values) {
     ).getResult();
 
   return lhs;  
+}
+
+template <class Container = std::initializer_list<FValue>>
+FValue vector(Container values) {
+  std::vector<Value> vec(std::begin(values), std::end(values));
+  assert(vec.size() >= 1 && "cannot create empty vector");
+
+  Type firstType = vec.front().getType();
+
+  for (const auto& el : vec)
+    assert(el.getType() == firstType && "types must match");
+
+  auto resultType = FVectorType::get(firstType.dyn_cast<FIRRTLBaseType>(), vec.size());
+
+  return firpContext()->builder().create<VectorCreateOp>(
+    firpContext()->builder().getUnknownLoc(),
+    resultType,
+    vec    
+  ).getResult();
 }
 
 class Reg {
@@ -382,6 +410,9 @@ public:
   void write(FValue what) { FValue(wireOp.getResult()) <<= what; }
   operator FValue() { return read(); }
   void operator<<=(FValue what) { write(what); }
+  FValue operator()(const std::string& fieldName) { return read()(fieldName); }
+  FValue operator()(uint32_t i) { return read()(i); }
+  FValue operator()(uint32_t hi, uint32_t lo) { return read()(hi, lo); }
 };
 
 // Chisel-like convenience functions
@@ -409,39 +440,7 @@ class Module {
   uint32_t signatureId;
   FModuleOp modOp;
   InstanceOp instOp;
-
-  /*
-  template <class...Args>
-  void declare(Args&&...args) {
-    std::vector<PortInfo> portInfos;
-    for (const Port& port : ports)
-      portInfos.emplace_back(
-        firpContext()->builder().getStringAttr(port.name),
-        port.type,
-        port.isInput ? Direction::In : Direction::Out
-      );
-
-    firpContext()->beginModuleDeclaration();
-
-    FModuleOp modOp = firpContext()->builder().create<FModuleOp>(
-      firpContext()->builder().getUnknownLoc(),
-      firpContext()->builder().getStringAttr(name),
-      portInfos
-    );
-
-    firpContext()->declaredModules.addDeclared(hashValue, modOp);
-    this->modOp = modOp;
-
-    Value newClock = modOp.getBodyBlock()->getArguments()[0];
-    Value newReset = modOp.getBodyBlock()->getArguments()[1];
-    OpBuilder newBuilder = modOp.getBodyBuilder();
-
-    firpContext()->beginContext(newClock, newReset, newBuilder);
-    static_cast<ConcreteModule *>(this)->body(args...);
-    firpContext()->endContext();
-
-    firpContext()->endModuleDeclaration();
-  }*/
+  bool wasBuilt = false;
 
   void instantiate() {
     instOp = firpContext()->builder().create<InstanceOp>(
@@ -498,7 +497,19 @@ public:
   virtual ~Module() {
     // Doing construction here retains the natural hierarchy. Additionally, it ensures
     // that the bound this pointer of the body constructor is still valid.
+    //firpContext()->moduleBuilder->build(signatureId);
+
+    //build();
+
+    assert(wasBuilt && "Module was not built. Did you call build() in the constructor?");
+  }
+
+  void build() {
+    //if (wasBuilt)
+    //  return;
+    assert(!wasBuilt && "Module was already built. Make sure that build() is only called once.");
     firpContext()->moduleBuilder->build(signatureId);
+    wasBuilt = true;
   }
 
   FValue io(const std::string& name) {

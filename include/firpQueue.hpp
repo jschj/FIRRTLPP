@@ -18,7 +18,7 @@ public:
         Port("count", false, uintType(clog2(depth)))
       },
       elementType, depth
-    ), elementType(elementType), depth(depth) {}
+    ), elementType(elementType), depth(depth) { build(); }
   
   void body() {
     // This hack is easier than implementing simultaneous enqueue and dequeue logic.
