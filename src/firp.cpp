@@ -58,9 +58,10 @@ void ModuleBuilder::build(uint32_t sigId) {
   OpBuilder newBuilder = modOp.getBodyBuilder();
 
   firpContext()->beginContext(newClock, newReset, newBuilder);
+  uint32_t oldBody = inBodyOf;
   inBodyOf = sigId;
   constructable.bodyCtor();
-  inBodyOf = -1;
+  inBodyOf = oldBody;
   firpContext()->endContext();
 
   constructed.insert(sigId);
