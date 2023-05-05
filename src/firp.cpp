@@ -147,6 +147,7 @@ void FirpContext::finish() {
   FModuleOp wrapper = opBuilder.create<FModuleOp>(
     opBuilder.getUnknownLoc(),
     opBuilder.getStringAttr(circuitOp.getName()),
+    ConventionAttr::get(firpContext()->context(), Convention::Internal),
     top.getPorts()
   );
 
@@ -516,7 +517,7 @@ Wire wireInit(FValue what, const std::string& name) {
 FValue named(FValue what, const std::string& name) {
   return firpContext()->builder().create<NodeOp>(
     firpContext()->builder().getUnknownLoc(),
-    what.getType(),
+    //what.getType(),
     what,
     firpContext()->builder().getStringAttr(name)
   ).getResult();

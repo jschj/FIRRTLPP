@@ -213,6 +213,7 @@ public:
     FModuleOp modOp = firpContext()->builder().create<FModuleOp>(
       firpContext()->builder().getUnknownLoc(),
       firpContext()->builder().getStringAttr(fullName),
+      ConventionAttr::get(firpContext()->context(), Convention::Internal),
       portInfos
     );
 
@@ -249,6 +250,7 @@ public:
     FExtModuleOp modOp = firpContext()->builder().create<FExtModuleOp>(
       firpContext()->builder().getUnknownLoc(),
       firpContext()->builder().getStringAttr(baseName),
+      ConventionAttr::get(firpContext()->context(), Convention::Internal),
       portInfos
     );
 
