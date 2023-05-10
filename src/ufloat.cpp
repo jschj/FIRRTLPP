@@ -52,7 +52,6 @@ void PipelinedAdder::body() {
     //llvm::outs() << "i=" << i << " preDelay + postDelay = " << preDelay << " " << postDelay << "\n";
     //llvm::outs() << "hi, lo " << hi << " " << lo << "\n";
 
-    /*
     llvm::outs() << std::string("inA_") + std::to_string(i) << " is delayed by " << preDelay << "\n";
 
     auto inA = wireInit(shiftRegister(io("a")(hi, lo), preDelay), std::string("inA_") + std::to_string(i));
@@ -65,9 +64,13 @@ void PipelinedAdder::body() {
     carry = sum(maxAdderWidth);
 
     resultChunks.push_back(shiftRegister(sumOut, postDelay));
-     */
 
-    auto aDelayed = wireInit(shiftRegister(io("a")(hi, lo), preDelay + postDelay), std::string("aDelayed_") + std::to_string(i));
+    continue;
+
+    llvm::outs() << "delay = " << preDelay + postDelay << "\n";
+
+    //auto aDelayed = wireInit(shiftRegister(io("a")(hi, lo), preDelay + postDelay), std::string("aDelayed_") + std::to_string(i));
+    auto aDelayed = wireInit(regNext(io("a")(hi, lo)), std::string("aDelayed_") + std::to_string(i));
     resultChunks.push_back(aDelayed);
   }
 
@@ -76,6 +79,8 @@ void PipelinedAdder::body() {
 
   
   io("c") <<= cat(resultChunks);
+
+  svCocoTBVerbatim("PipelinedAdder");
 }
 
 }

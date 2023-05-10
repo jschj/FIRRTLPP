@@ -117,7 +117,7 @@ int main(int argc, const char **argv) {
   }
 
   firpContext()->finish();
-  firpContext()->dump();
+  //firpContext()->dump();
 
   assert(succeeded(lowerFirrtlToHw()));
   assert(succeeded(exportVerilog(".")));
