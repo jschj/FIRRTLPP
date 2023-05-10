@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-SIM = questa
+SIM = verilator #questa
 TOPLEVEL_LANG ?= verilog
 
 PWD=$(shell pwd)
@@ -20,6 +20,11 @@ VERILOG_SOURCES += $(call rwildcard,$(INCLUDE_DIR),*.sv)
 TOPLEVEL := PipelinedAdder
 MODULE   := test_pipelinedAdder
 
-#VSIM_ARGS=-t 1us
+# some verilator stuff
+COMPILE_ARGS+="--no-timing"
+COMPILE_ARGS+="--trace"
+
+SIM_ARGS+="--trace"
+
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

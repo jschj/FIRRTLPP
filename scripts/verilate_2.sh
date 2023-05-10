@@ -2,10 +2,11 @@
 
 PROJECT_DIR=$BASE_DIR/firrtlpp
 TOP=$1
+TMP_DIR=tmp_$TOP
 
-rm -rf tmp
-mkdir tmp
-cd tmp
+rm -rf $TMP_DIR
+mkdir $TMP_DIR
+cd $TMP_DIR
 
 # generate verilog files
 $PROJECT_DIR/build/firrtlpp
