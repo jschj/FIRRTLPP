@@ -15,12 +15,12 @@ void pipelinedAdderTest(Dut& dut, VerilatedVcdC *tfp, vluint64_t& timeStamp) {
 
   srand(time(0));
 
-  for (uint32_t i = 0; i < 100; ++i, ++timeStamp) {
+  for (uint32_t i = 0; i < 1000000; ++i, ++timeStamp) {
     dut.clock = !dut.clock;
 
-    if (dut.clock) {
-      uint32_t a = i <= 2 ? rand() % (1ul << bits) : 0;
-      uint32_t b = i <= 2 ? rand() % (1ul << bits) : 0;
+    if (!dut.clock) {
+      uint32_t a = rand() % (1ul << bits);
+      uint32_t b = rand() % (1ul << bits);
       uint32_t c = a + b;
 
       expected.push_back(c);
@@ -39,13 +39,14 @@ void pipelinedAdderTest(Dut& dut, VerilatedVcdC *tfp, vluint64_t& timeStamp) {
       tfp->dump(timeStamp);
   }
 
-  std::cout << "expected size vs. got size: " << expected.size() << " vs. " << got.size() << "\n";
+  //std::cout << "expected size vs. got size: " << expected.size() << " vs. " << got.size() << "\n";
 
   //assert(got.size() <= expected.size());
 
+  std::cout << "checking results...\n";
   for (uint32_t i = 0; i < got.size(); ++i) {
-    std::cout << "exp/got @ i=" << i << ": " << expected[i] << " " << got[i] << "\n";
-    //assert(expected[i] == got[i]);
+    //std::cout << "exp/got @ i=" << i << ": " << expected[i] << " " << got[i] << "\n";
+    assert(expected[i] == got[i]);
   }
 
   std::cout << "Everything works!" << std::endl;

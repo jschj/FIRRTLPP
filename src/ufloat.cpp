@@ -49,11 +49,6 @@ void PipelinedAdder::body() {
     uint32_t preDelay = i;
     uint32_t postDelay = stageCount - i - 1;
 
-    //llvm::outs() << "i=" << i << " preDelay + postDelay = " << preDelay << " " << postDelay << "\n";
-    //llvm::outs() << "hi, lo " << hi << " " << lo << "\n";
-
-    llvm::outs() << std::string("inA_") + std::to_string(i) << " is delayed by " << preDelay << "\n";
-
     auto inA = wireInit(shiftRegister(io("a")(hi, lo), preDelay), std::string("inA_") + std::to_string(i));
     auto inB = wireInit(shiftRegister(io("b")(hi, lo), preDelay), std::string("inB_") + std::to_string(i));
 
@@ -64,23 +59,14 @@ void PipelinedAdder::body() {
     carry = sum(maxAdderWidth);
 
     resultChunks.push_back(shiftRegister(sumOut, postDelay));
-
-    continue;
-
-    llvm::outs() << "delay = " << preDelay + postDelay << "\n";
-
-    //auto aDelayed = wireInit(shiftRegister(io("a")(hi, lo), preDelay + postDelay), std::string("aDelayed_") + std::to_string(i));
-    auto aDelayed = wireInit(regNext(io("a")(hi, lo)), std::string("aDelayed_") + std::to_string(i));
-    resultChunks.push_back(aDelayed);
   }
 
   resultChunks.push_back(carry);
   std::reverse(resultChunks.begin(), resultChunks.end());
-
   
   io("c") <<= cat(resultChunks);
 
-  svCocoTBVerbatim("PipelinedAdder");
+  //svCocoTBVerbatim("PipelinedAdder");
 }
 
 }

@@ -296,7 +296,7 @@ FValue cat(std::initializer_list<FValue> values) {
 FValue shiftRegister(FValue input, uint32_t delay) {
   FValue result = input;
 
-  for (uint32_t i = 0; i <= delay; ++i)
+  for (uint32_t i = 0; i < delay; ++i)
     result = regNext(result);
 
   return result;
