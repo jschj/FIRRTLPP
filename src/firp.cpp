@@ -198,13 +198,13 @@ FValue cons(uint64_t n, IntType type) {
     ::llvm::APInt(64, n) :
     ::llvm::APInt(type.getWidthOrSentinel(), n);
 
-  Value val = ctxt->builder().create<ConstantOp>(
+  FValue val = ctxt->builder().create<ConstantOp>(
     ctxt->builder().getUnknownLoc(),
     type,
     concreteValue
   ).getResult();
 
-  return lift(val);
+  return val;
 }
 
 FValue mux(FValue cond, FValue pos, FValue neg) {
@@ -229,18 +229,36 @@ FValue mux(FValue sel, std::initializer_list<FValue> options) {
 }
 
 FValue zeros(FIRRTLBaseType type) {
-  int32_t width = type.getBitWidthOrSentinel();
-  assert(width >= 0);
+  if (BundleType bundleType = type.dyn_cast<BundleType>()) {
+    SmallVector<FValue> zeroValues;
+
+    for (auto el : bundleType.getElements())
+      zeroValues.push_back(zeros(el.type));
+
+    return bundleCreate(bundleType, zeroValues);
+  } else if (IntType intType = type.dyn_cast<IntType>()) {
+    int32_t width = intType.getBitWidthOrSentinel();
+    assert(width >= 0 && "cannot create zeroes for int type with uninferred width");
+    return cons(0, intType);
+  } else {
+    assert(false && "type not supported");
+  }
+
+  /*
   FValue zeroValue = cons(0, uintType(width));
 
-  if (llvm::isa<IntType>(type))
+  if (llvm::isa<IntType>(type)) {
+    int32_t width = type.getBitWidthOrSentinel();
+    assert(width >= 0);
     return zeroValue;
+  }
 
   return firpContext()->builder().create<BitCastOp>(
     firpContext()->builder().getUnknownLoc(),
     type,
     zeroValue
   ).getResult();
+   */
 }
 
 FValue ones(FIRRTLBaseType type) {
@@ -469,8 +487,8 @@ FValue FValue::extend(size_t width) {
 
 uint32_t FValue::bitCount() {
   if (IntType intType = llvm::dyn_cast<IntType>(getType()))
-    if (int32_t w = intType.getBitWidthOrSentinel() != -1)
-      return uint32_t(w);
+    if (intType.getBitWidthOrSentinel() != -1)
+      return uint32_t(intType.getBitWidthOrSentinel());
 
   throw std::runtime_error("Type is not an int type or has unknown width!");
 }
@@ -495,6 +513,7 @@ Wire::Wire(FIRRTLBaseType type, const std::string& name) {
     type,
     name
   );
+  this->type = type;
 }
 
 Reg regNext(FValue what, const std::string& name) {

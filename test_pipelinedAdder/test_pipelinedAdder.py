@@ -15,7 +15,7 @@ import random
 from copy import copy
 
 SAMPLE_COUNT = 1000
-DELAY = 3
+DELAY = 4
 
 def generate_test_data(bitWidth):
   a_ins = []
@@ -73,6 +73,7 @@ async def test_pipelinedAdder(dut):
   # poke around
   got = []
   t = 0
+  ci = 0
 
   for a, b in zip(a_ins, b_ins):
     await FallingEdge(dut.clock)
@@ -83,11 +84,14 @@ async def test_pipelinedAdder(dut):
 
     if t // 2 >= DELAY:
       got.append(dut.c.value.integer)
+      print(f'got={dut.c.value.integer} exp={c_outs[ci]}')
+      ci += 1
 
     await RisingEdge(dut.clock)
     t += 1
 
   # check results
+  print('checking results...')
   c_outs = c_outs[0:-DELAY]
   assert len(got) == len(c_outs)
 

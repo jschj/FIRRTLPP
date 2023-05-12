@@ -91,7 +91,7 @@ int main(int argc, const char **argv) {
   using namespace ::circt::firrtl;
   using namespace ::mlir;
 
-  initFirpContext(context.get(), "PipelinedAdder");
+  initFirpContext(context.get(), "FPAdd");
 
   //llvm::outs()
   //  << firpContext()->moduleBuilder->getSignatureId(123, 456) << "\n"
@@ -112,12 +112,15 @@ int main(int argc, const char **argv) {
     //MyTop myTop(uintType(32));
     //myTop.makeTop();
 
-    ufloat::PipelinedAdder adder(16, 4);
+    //ufloat::PipelinedAdder adder(18, 4);
+    //adder.makeTop();
+
+    ufloat::FPAdd adder(ufloat::UFloatConfig{8, 23});
     adder.makeTop();
   }
 
   firpContext()->finish();
-  //firpContext()->dump();
+  firpContext()->dump();
 
   assert(succeeded(lowerFirrtlToHw()));
   assert(succeeded(exportVerilog(".")));

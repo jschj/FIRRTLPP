@@ -388,6 +388,24 @@ FValue vector(Container values) {
   ).getResult();
 }
 
+template <class Container = std::initializer_list<FValue>>
+FValue bundleCreate(BundleType type, Container container) {
+  std::vector<Value> values;
+
+  for (auto e : container)
+    values.push_back(e);
+
+  return firpContext()->builder().create<BundleCreateOp>(
+    firpContext()->builder().getUnknownLoc(),
+    type,
+    ArrayRef<Value>(values)
+  ).getResult();
+}
+
+//constexpr FValue operator""_u(unsigned long long int n) {
+//  return FValue();
+//}
+
 class Reg {
   RegResetOp regOp;
   FIRRTLBaseType type;
