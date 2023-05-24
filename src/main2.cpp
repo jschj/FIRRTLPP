@@ -91,7 +91,8 @@ int main(int argc, const char **argv) {
   using namespace ::circt::firrtl;
   using namespace ::mlir;
 
-  initFirpContext(context.get(), "FPAdd");
+  //initFirpContext(context.get(), "FPAdd");
+  initFirpContext(context.get(), "DSPMult");
 
   //llvm::outs()
   //  << firpContext()->moduleBuilder->getSignatureId(123, 456) << "\n"
@@ -115,8 +116,11 @@ int main(int argc, const char **argv) {
     //ufloat::PipelinedAdder adder(18, 4);
     //adder.makeTop();
 
-    ufloat::FPAdd adder(ufloat::UFloatConfig{8, 23});
-    adder.makeTop();
+    //ufloat::FPAdd adder(ufloat::UFloatConfig{8, 23});
+    //adder.makeTop();
+
+    ufloat::DSPMult mult(64);
+    mult.makeTop();
   }
 
   firpContext()->finish();

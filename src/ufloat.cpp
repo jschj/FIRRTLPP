@@ -18,49 +18,6 @@ FIRRTLBaseType ufloatType(const UFloatConfig& cfg) {
   });
 }
 
-void PipelinedAdder::body() {
-  // inspired by http://vlsigyan.com/pipeline-adder-verilog-code/
-
-  if (bitWidth <= maxAdderWidth) {
-    io("c") <<= io("a") + io("b");
-    return;
-  }
-
-  uint32_t stageCount = bitWidth / maxAdderWidth + (bitWidth % maxAdderWidth ? 1 : 0);
-  auto carry = cons(0, uintType(1));
-  //Wire result(uintType(bitWidth + 1));
-  std::vector<FValue> resultChunks;
-
-  for (uint32_t i = 0; i < stageCount; ++i) {
-    uint32_t lo = i * maxAdderWidth;
-    uint32_t hi = std::min(lo + maxAdderWidth - 1, bitWidth - 1);
-
-    uint32_t preDelay = i;
-    uint32_t postDelay = stageCount - i - 1;
-
-    auto inA = wireInit(shiftRegister(io("a")(hi, lo), preDelay), std::string("inA_") + std::to_string(i));
-    auto inB = wireInit(shiftRegister(io("b")(hi, lo), preDelay), std::string("inB_") + std::to_string(i));
-
-    // top bit is ignored as it will never be set to 1
-    auto sum = inA.read() + inB + shiftRegister(carry, 1);
-    uint32_t sumWidth = sum.bitCount();
-    llvm::outs() << " sum/inA/inB width: " << sum.bitCount() << " " << inA.read().bitCount() << " " << inB.read().bitCount() << "\n";
-
-    // top bit will always be 0
-    auto sumOut = sum(sumWidth - 3, 0);
-    carry = sum(sumWidth - 2);
-
-    resultChunks.push_back(shiftRegister(sumOut, postDelay));
-  }
-
-  resultChunks.push_back(carry);
-  std::reverse(resultChunks.begin(), resultChunks.end());
-  
-  io("c") <<= cat(resultChunks);
-
-  //svCocoTBVerbatim("PipelinedAdder");
-}
-
 std::tuple<FValue, FValue> swapIfGTE(FValue a, FValue b) {
   auto doSwap = a("e") >= b("e");
   return std::make_tuple(
@@ -173,5 +130,71 @@ void FPAdd::body() {
     m_6
   });
 }
+
+/*
+FValue DSPMult24x17(FValue x, FValue y) {
+  assert(x.bitCount() == 24);
+  assert(y.bitCount() == 17);
+  return regNext(x * y);
+}
+
+FValue SmallMult(FValue x, FValue y) {
+  return regNext(x * y);
+}
+
+FValue Add(FValue x, FValue y, uint32_t width) {
+  PipelinedAdder adder(width, 32);
+  adder.io("a") <<= x;
+  adder.io("b") <<= y;
+  return adder.io("c");
+}
+
+FValue treeReduce(const std::vector<FValue>& values, uint32_t from, uint32_t to, uint32_t adderDelay) {
+  // TODO: What about the bit widths of the values?
+
+  if (to - from == 1)
+    return shiftRegister(values[from], adderDelay);
+
+  if (to - from == 2)
+    return Add(values[from], values[from + 1], values[from].bitCount());
+
+  uint32_t mid = (from + to) / 2;
+
+  auto left = treeReduce(values, from, mid, adderDelay);
+  auto right = treeReduce(values, mid, to, adderDelay);
+
+  return Add(left, right, left.bitCount());
+}
+
+void DSPMult::body() {
+
+  // TODO: How to get allocations?
+  std::vector<DSPMultAllocation> allocations;
+
+  std::vector<FValue> dsps;
+
+  for (const DSPMultAllocation& alloc : allocations) {
+    uint32_t xLo = alloc.xSelectorA();
+    uint32_t xHi = std::min(width - 1, alloc.xSelectorB());
+    uint32_t yLo = alloc.ySelectorA();
+    uint32_t yHi = std::min(width - 1, alloc.ySelectorB());
+    // TODO: Check if upper bound is exclusive.
+    uint32_t xIn = io("a")(xHi, xLo);
+    uint32_t yIn = io("b")(yHi, yLo);
+
+    // TODO: check logical precedence
+    if (alloc.xWidth + alloc.yWidth == 41 && alloc.xWidth == 24 || alloc.yWidth == 24) {
+      auto res = alloc.xWidth == 24 ? DSPMult24x17(xIn, yIn) : DSPMult24x17(yIn, xIn);
+      auto shifted = alloc.shift() != 0 ? cat({res, cons(0, uintType(alloc.shift()))}) : res;
+      dsps.push_back(shifted);
+    } else {
+      auto res = SmallMult(xIn, yIn); // TODO: Maybe add alloc.xWidth and alloc.yWidth?
+      auto shifted = alloc.shift() != 0 ? cat({res, cons(0, uintType(alloc.shift()))}) : res;
+      dsps.push_back(shifted);
+    }
+  }
+
+  io("c") <<= treeReduce(dsps, 0, dsps.size(), 123);
+}*/
 
 }

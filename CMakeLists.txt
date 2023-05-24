@@ -73,6 +73,8 @@ add_executable(firrtlpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ShiftRegister.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ufloat.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/lowering.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/dspMult.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/pipelinedAdder.cpp
 )
 
 target_include_directories(firrtlpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)

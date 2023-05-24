@@ -350,10 +350,9 @@ FValue zeros(FIRRTLBaseType type);
 FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
 FValue clockToInt(FValue clock);
-FValue cat(std::initializer_list<FValue> values);
 FValue shiftRegister(FValue input, uint32_t delay);
 
-template <class Container>
+template <class Container = std::initializer_list<FValue>>
 FValue cat(Container values) {
   assert(values.size() > 0 && "cat is not defined for 0 arguments");
 

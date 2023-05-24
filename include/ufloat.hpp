@@ -1,6 +1,7 @@
 #pragma once
 
-#include "firp.hpp"
+#include "pipelinedAdder.hpp"
+#include "dspMult.hpp"
 
 
 namespace ufloat {
@@ -56,37 +57,42 @@ public:
 
 namespace ufloat {
 
-class PipelinedAdder : public firp::Module<PipelinedAdder> {
-  uint32_t bitWidth, maxAdderWidth;
-public:
-  PipelinedAdder(uint32_t bitWidth, uint32_t maxAdderWidth):
-    firp::Module<PipelinedAdder>(
-      "PipelinedAdder",
-      {
-        firp::Port("a", true, firp::uintType(bitWidth)),
-        firp::Port("b", true, firp::uintType(bitWidth)),
-        firp::Port("c", false, firp::uintType(bitWidth + 1))
-      },
-      bitWidth, maxAdderWidth
-    ), bitWidth(bitWidth), maxAdderWidth(maxAdderWidth) { build(); }
-  
-  void body();
-
-  static uint32_t getDelay(uint32_t bitWidth, uint32_t maxAdderWidth) {
-    return bitWidth / maxAdderWidth + (bitWidth % maxAdderWidth ? 1 : 0);
-  }
-
-  uint32_t getDelay() const {
-    return getDelay(bitWidth, maxAdderWidth);
-  }
-};
-
 class FPAdd : public firp::Module<FPAdd> {
   UFloatConfig cfg;
 public:
   FPAdd(const UFloatConfig& cfg):
     firp::Module<FPAdd>(
       "FPAdd",
+      {
+        firp::Port("a", true, firp::uintType(cfg.getWidth())),
+        firp::Port("b", true, firp::uintType(cfg.getWidth())),
+        firp::Port("c", false, firp::uintType(cfg.getWidth()))
+      },
+      cfg
+    ), cfg(cfg) { build(); }
+
+  void body();
+};
+
+struct DSPMultAllocation {
+  uint32_t xPos;
+  uint32_t yPos;
+  uint32_t xWidth;
+  uint32_t yWidth;
+
+  uint32_t shift() const { return xPos + yPos; }
+  uint32_t xSelectorA() const { return xPos; }
+  uint32_t xSelectorB() const { return xPos + xWidth - 1; }
+  uint32_t ySelectorA() const { return yPos; }
+  uint32_t ySelectorB() const { return yPos + yWidth - 1; }
+};
+
+class FPMult : public firp::Module<FPMult> {
+  UFloatConfig cfg;
+public:
+  FPMult(const UFloatConfig& cfg):
+    firp::Module<FPMult>(
+      "FPMult",
       {
         firp::Port("a", true, firp::uintType(cfg.getWidth())),
         firp::Port("b", true, firp::uintType(cfg.getWidth())),

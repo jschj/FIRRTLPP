@@ -280,21 +280,6 @@ FValue clockToInt(FValue clock) {
   ).getResult();
 }
 
-FValue cat(std::initializer_list<FValue> values) {
-  assert(values.size() > 0 && "cat is not defined for 0 arguments");
-
-  FValue lhs = *values.begin();
-
-  // skip the first one
-  for (auto it = values.begin() + 1; it != values.end(); ++it)
-    lhs = firpContext()->builder().create<CatPrimOp>(
-      firpContext()->builder().getUnknownLoc(),
-      lhs, *it
-    ).getResult();
-
-  return lhs;  
-}
-
 FValue shiftRegister(FValue input, uint32_t delay) {
   FValue result = input;
 
