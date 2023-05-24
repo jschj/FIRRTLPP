@@ -79,10 +79,19 @@ FValue shiftStage(FValue value, FValue shamt) {
   return regNext(cat({cons(1, bitType()), value}) >> shamt);
 }
 
-std::tuple<FValue, FValue> mantissaShift(FValue sum) {
+std::tuple<FValue, FValue> mantissaShift(FValue sum, uint32_t manWidth) {
   uint32_t hi = sum.bitCount() - 1;
+  
+  auto shifted = mux(
+    sum(hi),
+    sum(hi - 1, 0)(manWidth, 1),
+    sum(hi - 2, 0)
+  );
+
+  assert(shifted.bitCount() == manWidth);
+
   return std::make_tuple(
-    mux(sum(hi), sum(hi - 1, 0), sum(hi - 2, 0)),
+    shifted,
     sum(hi)
   );
 }
@@ -150,9 +159,14 @@ void FPAdd::body() {
   auto minuend_is_zero_4 = shiftRegister(minuend_is_zero_3, adder.getDelay());
   auto e1_4 = shiftRegister(e1_3, adder.getDelay());
 
+  SHOW(mantissaSum);
+
   // stage 5: shift sum if necessary and increment exponent
-  auto [shiftedMantissaOut, shiftedMantissaShifted] = mantissaShift(mantissaSum);
+  auto [shiftedMantissaOut, shiftedMantissaShifted] = mantissaShift(mantissaSum, cfg.mantissaWidth);
   auto m_6 = regNext(shiftedMantissaOut);
+
+  SHOW(shiftedMantissaOut);
+  SHOW(shiftedMantissaShifted);
 
   io("c") <<= cat({
     exponentAdder(e1_4, shiftedMantissaShifted, minuend_is_zero_4),

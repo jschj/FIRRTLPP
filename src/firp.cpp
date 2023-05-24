@@ -243,22 +243,6 @@ FValue zeros(FIRRTLBaseType type) {
   } else {
     assert(false && "type not supported");
   }
-
-  /*
-  FValue zeroValue = cons(0, uintType(width));
-
-  if (llvm::isa<IntType>(type)) {
-    int32_t width = type.getBitWidthOrSentinel();
-    assert(width >= 0);
-    return zeroValue;
-  }
-
-  return firpContext()->builder().create<BitCastOp>(
-    firpContext()->builder().getUnknownLoc(),
-    type,
-    zeroValue
-  ).getResult();
-   */
 }
 
 FValue ones(FIRRTLBaseType type) {
