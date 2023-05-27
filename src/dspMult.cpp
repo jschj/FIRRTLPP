@@ -7,15 +7,6 @@ using namespace firp;
 
 // TODO: Is it 25x18 or 24x17?
 
-struct DSPTile {
-  // These bounds are inclusive!
-  uint32_t xHi, xLo, yHi, yLo;
-
-  uint32_t getShift() const {
-    return xLo + yLo;
-  }
-};
-
 // This is a really stupid way to tile a bitWidth x bitWidth grid with 25x18 DSPs only!
 std::vector<DSPTile> getDSPTiles(uint32_t bitWidth) {
   std::vector<DSPTile> tiles;

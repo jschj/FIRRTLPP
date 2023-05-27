@@ -294,6 +294,24 @@ void FPConvert::body() {
 
 }
 
+namespace ufloat::scheduling {
+
+uint32_t ufloatFPAddDelay(const UFloatConfig& cfg) {
+  return PipelinedAdder::getDelay(cfg.mantissaWidth + 1, 32) + 3;
+}
+
+uint32_t ufloatFPMultDelay(const UFloatConfig& cfg) {
+  auto tiles = getDSPTiles(cfg.getWidth());
+  uint32_t dspDelay = clog2(tiles.size() + 1);
+  return dspDelay + 1;
+}
+
+uint32_t ufloatFPConvertDelay(const UFloatConfig& cfg) {
+  return 2;
+}
+
+}
+
 #include <firp/lowering.hpp>
 
 using namespace ::firp;

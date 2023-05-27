@@ -5,6 +5,17 @@
 
 namespace ufloat {
 
+struct DSPTile {
+  // These bounds are inclusive!
+  uint32_t xHi, xLo, yHi, yLo;
+
+  uint32_t getShift() const {
+    return xLo + yLo;
+  }
+};
+
+std::vector<DSPTile> getDSPTiles(uint32_t bitWidth);
+
 class DSPMult : public firp::Module<DSPMult> {
   uint32_t width;
   uint32_t adderWidth;

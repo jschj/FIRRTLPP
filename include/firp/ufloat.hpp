@@ -115,3 +115,11 @@ public:
 };
 
 }
+
+namespace ufloat::scheduling {
+
+uint32_t ufloatFPAddDelay(const UFloatConfig& cfg);
+uint32_t ufloatFPMultDelay(const UFloatConfig& cfg);
+uint32_t ufloatFPConvertDelay(const UFloatConfig& cfg);
+
+}
