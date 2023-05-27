@@ -1,4 +1,4 @@
-#include "ufloat.hpp"
+#include <firp/ufloat.hpp>
 
 
 
@@ -215,9 +215,14 @@ void FPMult::body() {
   io("c") <<= result;
 }
 
+void FPConvert::body() {
+  // TODO: implement
+  io("out") <<= io("in");
 }
 
-#include "lowering.hpp"
+}
+
+#include <firp/lowering.hpp>
 
 using namespace ::firp;
 using namespace ::circt::firrtl;

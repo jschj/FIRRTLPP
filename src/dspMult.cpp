@@ -1,4 +1,4 @@
-#include "dspMult.hpp"
+#include <firp/dspMult.hpp>
 
 
 namespace ufloat {

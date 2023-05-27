@@ -1,4 +1,4 @@
-#include "AXI4.hpp"
+#include <firp/AXI4.hpp>
 
 
 namespace axi4 {

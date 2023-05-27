@@ -1,4 +1,4 @@
-#include "lowering.hpp"
+#include <firp/lowering.hpp>
 
 #include "circt/Conversion/FIRRTLToHW.h"
 #include "circt/Conversion/ExportVerilog.h"

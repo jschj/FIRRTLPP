@@ -1,11 +1,11 @@
 #include <iostream>
-#include "firp.hpp"
-#include "firpQueue.hpp"
-#include "AXIStream.hpp"
-#include "AXI4.hpp"
+#include <firp/firp.hpp>
+#include <firp/firpQueue.hpp>
+#include <firp/AXIStream.hpp>
+#include <firp/AXI4.hpp>
 //#include "esi.hpp"
-#include "ufloat.hpp"
-#include "lowering.hpp"
+#include <firp/ufloat.hpp>
+#include <firp/lowering.hpp>
 
 using namespace firp;
 //using namespace axi4;

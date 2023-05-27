@@ -1,6 +1,6 @@
-#include "AXIStream.hpp"
+#include <firp/AXIStream.hpp>
 
-#include "firpQueue.hpp"
+#include <firp/firpQueue.hpp>
 
 
 namespace firp::axis {

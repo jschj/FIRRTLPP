@@ -1,4 +1,4 @@
-#include "ShiftRegister.hpp"
+#include <firp/ShiftRegister.hpp>
 
 
 namespace firp {
