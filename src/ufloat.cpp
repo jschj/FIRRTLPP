@@ -7,15 +7,27 @@ namespace ufloat {
 
 using namespace firp;
 
-FIRRTLBaseType UFloatConfig::getType() const {
+BundleType UFloatConfig::getType() const {
   return ufloatType(*this);
 }
 
-FIRRTLBaseType ufloatType(const UFloatConfig& cfg) {
+BundleType ufloatType(const UFloatConfig& cfg) {
   return bundleType({
     {"e", false, uintType(cfg.exponentWidth)},
     {"m", false, uintType(cfg.mantissaWidth)}
   });
+}
+
+FValue ufloatUnpack(FValue what, const UFloatConfig& cfg) {
+  assert(what.bitCount() == cfg.getWidth());
+  Value e = what(cfg.getWidth() - 1, cfg.mantissaWidth);
+  Value m = what(cfg.mantissaWidth - 1, 0);
+  return bundleCreate(cfg.getType(), {e, m});
+}
+
+FValue ufloatPack(FValue what, const UFloatConfig& cfg) {
+  assert(what.bitCount() == cfg.getWidth());
+  return cat({what("e"), what("m")});
 }
 
 std::tuple<FValue, FValue> swapIfGTE(FValue a, FValue b) {
@@ -131,70 +143,135 @@ void FPAdd::body() {
   });
 }
 
-/*
-FValue DSPMult24x17(FValue x, FValue y) {
-  assert(x.bitCount() == 24);
-  assert(y.bitCount() == 17);
-  return regNext(x * y);
+FValue isEitherZero(FValue a, FValue b) {
+  uint32_t m = a("m").bitCount();
+  uint32_t e = a("e").bitCount();
+
+  return (a("e") == uval(0, e) & a("m") == uval(0, m)) |
+         (b("e") == uval(0, e) & b("m") == uval(0, m));
 }
 
-FValue SmallMult(FValue x, FValue y) {
-  return regNext(x * y);
+FValue addExponents(FValue e1, FValue e2) {
+  return regNext(e1 + e2);
 }
 
-FValue Add(FValue x, FValue y, uint32_t width) {
-  PipelinedAdder adder(width, 32);
-  adder.io("a") <<= x;
-  adder.io("b") <<= y;
-  return adder.io("c");
+std::tuple<FValue, FValue> incrementExponentAndSubtractOffset(FValue e, FValue add) {
+  uint32_t off = (1 << (e.bitCount() - 2)) - 1;
+  auto offsetDontAdd = sval(off);
+  auto offsetAdd = sval(off - 1);
+  auto e1Signed = cat({uval(0), e}).asSInt();
+  uint32_t n = e1Signed.bitCount();
+
+  auto selected = mux(add, e1Signed - offsetAdd, e1Signed - offsetDontAdd).tail(1); // throw away the +1 bit
+  auto overflowOut = selected.head(1);
+  // TODO: Why do the bit widths not match without head(8)?
+  auto eOut = selected.tail(2); //.head(8);
+
+  return std::make_tuple(eOut, overflowOut);
 }
 
-FValue treeReduce(const std::vector<FValue>& values, uint32_t from, uint32_t to, uint32_t adderDelay) {
-  // TODO: What about the bit widths of the values?
+FValue selectMantissa(FValue m, uint32_t manWidth) {
+  auto geq2 = m.head(1);
 
-  if (to - from == 1)
-    return shiftRegister(values[from], adderDelay);
-
-  if (to - from == 2)
-    return Add(values[from], values[from + 1], values[from].bitCount());
-
-  uint32_t mid = (from + to) / 2;
-
-  auto left = treeReduce(values, from, mid, adderDelay);
-  auto right = treeReduce(values, mid, to, adderDelay);
-
-  return Add(left, right, left.bitCount());
+  return mux(
+    geq2,
+    m.tail(1).head(manWidth),
+    m.tail(2).head(manWidth)
+  );
 }
 
-void DSPMult::body() {
+FValue handleZero(FValue m, FValue e, FValue underflow, FValue zero) {
+  auto mOut = regNext(mux(zero | underflow, uval(0, m.bitCount()), m));
+  auto eOut = regNext(mux(zero | underflow, uval(0, e.bitCount()), e));
+  return cat({eOut, mOut});
+}
 
-  // TODO: How to get allocations?
-  std::vector<DSPMultAllocation> allocations;
+void FPMult::body() {
+  auto op1 = regNext(ufloatUnpack(io("a"), cfg));
+  auto op2 = regNext(ufloatUnpack(io("b"), cfg));
 
-  std::vector<FValue> dsps;
+  // stage 1
+  DSPMult multMantissas(cfg.mantissaWidth + 1);
+  multMantissas.io("a") <<= cat({uval(1), op1("m")});
+  multMantissas.io("b") <<= cat({uval(1), op2("m")});
 
-  for (const DSPMultAllocation& alloc : allocations) {
-    uint32_t xLo = alloc.xSelectorA();
-    uint32_t xHi = std::min(width - 1, alloc.xSelectorB());
-    uint32_t yLo = alloc.ySelectorA();
-    uint32_t yHi = std::min(width - 1, alloc.ySelectorB());
-    // TODO: Check if upper bound is exclusive.
-    uint32_t xIn = io("a")(xHi, xLo);
-    uint32_t yIn = io("b")(yHi, yLo);
+  auto zeroCheck = isEitherZero(op1, op2);
+  auto addExponentsWithOffset = addExponents(op1("e"), op2("e"));
 
-    // TODO: check logical precedence
-    if (alloc.xWidth + alloc.yWidth == 41 && alloc.xWidth == 24 || alloc.yWidth == 24) {
-      auto res = alloc.xWidth == 24 ? DSPMult24x17(xIn, yIn) : DSPMult24x17(yIn, xIn);
-      auto shifted = alloc.shift() != 0 ? cat({res, cons(0, uintType(alloc.shift()))}) : res;
-      dsps.push_back(shifted);
-    } else {
-      auto res = SmallMult(xIn, yIn); // TODO: Maybe add alloc.xWidth and alloc.yWidth?
-      auto shifted = alloc.shift() != 0 ? cat({res, cons(0, uintType(alloc.shift()))}) : res;
-      dsps.push_back(shifted);
-    }
+  // stage 2
+  uint32_t dspDelay = multMantissas.getDelay();
+  auto [eOut, underflowOut] = incrementExponentAndSubtractOffset(
+    shiftRegister(addExponentsWithOffset, dspDelay - 1),
+    multMantissas.io("c").head(1)
+  );
+
+  auto result = handleZero(
+    selectMantissa(multMantissas.io("c"), cfg.mantissaWidth),
+    eOut,
+    underflowOut,
+    shiftRegister(zeroCheck, dspDelay - 1)
+  );
+
+  io("c") <<= result;
+}
+
+}
+
+#include "lowering.hpp"
+
+using namespace ::firp;
+using namespace ::circt::firrtl;
+using namespace ::mlir;
+
+void generateFPAdd() {
+  std::unique_ptr<mlir::MLIRContext> context = std::make_unique<mlir::MLIRContext>();
+  assert(context->getOrLoadDialect<circt::hw::HWDialect>());
+  assert(context->getOrLoadDialect<circt::seq::SeqDialect>());
+  assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
+  assert(context->getOrLoadDialect<circt::sv::SVDialect>());
+
+  initFirpContext(context.get(), "FPAdd");
+
+  {
+    ufloat::FPAdd add(ufloat::UFloatConfig{8, 23});
+    add.makeTop();
   }
 
-  io("c") <<= treeReduce(dsps, 0, dsps.size(), 123);
-}*/
+  firpContext()->finish();
+  firpContext()->dump();
 
+  assert(succeeded(lowerFirrtlToHw()));
+  assert(succeeded(exportVerilog(".")));
+}
+
+void generateDSPMult() {
+
+}
+
+void generateFPMult() {
+  std::unique_ptr<mlir::MLIRContext> context = std::make_unique<mlir::MLIRContext>();
+  assert(context->getOrLoadDialect<circt::hw::HWDialect>());
+  assert(context->getOrLoadDialect<circt::seq::SeqDialect>());
+  assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
+  assert(context->getOrLoadDialect<circt::sv::SVDialect>());
+
+  initFirpContext(context.get(), "FPMult");
+
+  {
+    ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
+    mult.makeTop();
+  }
+
+  firpContext()->finish();
+  firpContext()->dump();
+
+  assert(succeeded(lowerFirrtlToHw()));
+  assert(succeeded(exportVerilog(".")));
+}
+
+int main(int argc, const char **argv) {
+  generateFPAdd();
+  generateFPMult();
+
+  return 0;
 }

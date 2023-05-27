@@ -207,6 +207,36 @@ FValue cons(uint64_t n, IntType type) {
   return val;
 }
 
+FValue uval(uint64_t n, int32_t bitCount) {
+  if (bitCount == -1)
+    bitCount = clog2(n);
+  else
+    assert(clog2(n) <= uint64_t(bitCount) && "Value does not fit in bitCount");
+
+  llvm::APInt value(bitCount, n, false);
+
+  return ctxt->builder().create<ConstantOp>(
+    ctxt->builder().getUnknownLoc(),
+    uintType(bitCount),
+    value
+  ).getResult();
+}
+
+FValue sval(int64_t n, int32_t bitCount) {
+  if (bitCount == -1)
+    bitCount = clog2(std::abs(n)) + 1;
+  else
+    assert(clog2(std::abs(n)) + 1 <= int64_t(bitCount) && "Value does not fit in bitCount");
+
+  llvm::APInt value(bitCount, n, true);
+
+  return ctxt->builder().create<ConstantOp>(
+    ctxt->builder().getUnknownLoc(),
+    sintType(bitCount),
+    value
+  ).getResult();
+}
+
 FValue mux(FValue cond, FValue pos, FValue neg) {
   return lift(
     firpContext()->builder().create<MuxPrimOp>(
@@ -462,6 +492,30 @@ uint32_t FValue::bitCount() {
   throw std::runtime_error("Type is not an int type or has unknown width!");
 }
 
+FValue FValue::head(uint32_t n) {
+  uint32_t m = bitCount();
+  return (*this)(m - 1, m - n);
+}
+
+FValue FValue::tail(uint32_t n) {
+  uint32_t m = bitCount();
+  return (*this)(m - n - 1, 0);
+}
+
+FValue FValue::asSInt() {
+  return firpContext()->builder().create<AsSIntPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this
+  ).getResult();
+}
+
+FValue FValue::asUInt() {
+  return firpContext()->builder().create<AsUIntPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this
+  ).getResult();
+}
+
 Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(type) {
   regOp = firpContext()->builder().create<RegResetOp>(
     firpContext()->builder().getUnknownLoc(),
@@ -564,8 +618,12 @@ IntType uintType() {
   return IntType::get(firpContext()->context(), false);
 }
 
-IntType uintType(uint32_t bitWidth) {
-  return IntType::get(firpContext()->context(), false, bitWidth);
+UIntType uintType(uint32_t bitWidth) {
+  return UIntType::get(firpContext()->context(), bitWidth);
+}
+
+SIntType sintType(uint32_t bitWidth) {
+  return SIntType::get(firpContext()->context(), bitWidth);
 }
 
 IntType bitType() {

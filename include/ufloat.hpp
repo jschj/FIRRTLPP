@@ -11,14 +11,17 @@ struct UFloatConfig {
   uint32_t mantissaWidth;
 
   uint32_t getWidth() const { return exponentWidth + mantissaWidth; }
-  firp::FIRRTLBaseType getType() const;
+  firp::BundleType getType() const;
 };
 
-firp::FIRRTLBaseType ufloatType(const UFloatConfig& cfg);
+firp::BundleType ufloatType(const UFloatConfig& cfg);
 
 struct UFloat : public firp::FValue {
   // TODO: Maybe throw this away?
 };
+
+firp::FValue ufloatUnpack(firp::FValue what, const UFloatConfig& cfg);
+firp::FValue ufloatPack(firp::FValue what, const UFloatConfig& cfg);
 
 }
 
@@ -72,19 +75,6 @@ public:
     ), cfg(cfg) { build(); }
 
   void body();
-};
-
-struct DSPMultAllocation {
-  uint32_t xPos;
-  uint32_t yPos;
-  uint32_t xWidth;
-  uint32_t yWidth;
-
-  uint32_t shift() const { return xPos + yPos; }
-  uint32_t xSelectorA() const { return xPos; }
-  uint32_t xSelectorB() const { return xPos + xWidth - 1; }
-  uint32_t ySelectorA() const { return yPos; }
-  uint32_t ySelectorB() const { return yPos + yWidth - 1; }
 };
 
 class FPMult : public firp::Module<FPMult> {

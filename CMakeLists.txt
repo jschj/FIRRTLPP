@@ -66,8 +66,33 @@ add_definitions(${LLVM_DEFINITIONS})
 
 
 
-add_executable(firrtlpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/main2.cpp
+#add_executable(firrtlpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/main2.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/AXIStream.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/ShiftRegister.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/ufloat.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/lowering.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/dspMult.cpp
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/pipelinedAdder.cpp
+#)
+#
+#target_include_directories(firrtlpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+#
+#target_link_libraries(firrtlpp PRIVATE ${LIBS}
+#  CIRCTHW
+#  CIRCTSeq
+#  CIRCTFIRRTL
+#  CIRCTFIRRTLToHW
+#  CIRCTFIRRTLTransforms
+#  CIRCTSeqTransforms
+#  CIRCTSVTransforms
+#  CIRCTExportVerilog
+#)
+
+
+
+add_executable(ufloat
   ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AXIStream.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ShiftRegister.cpp
@@ -77,9 +102,9 @@ add_executable(firrtlpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pipelinedAdder.cpp
 )
 
-target_include_directories(firrtlpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+target_include_directories(ufloat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
 
-target_link_libraries(firrtlpp PRIVATE ${LIBS}
+target_link_libraries(ufloat PRIVATE ${LIBS}
   CIRCTHW
   CIRCTSeq
   CIRCTFIRRTL
@@ -89,6 +114,8 @@ target_link_libraries(firrtlpp PRIVATE ${LIBS}
   CIRCTSVTransforms
   CIRCTExportVerilog
 )
+
+
 
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${MLIR_INCLUDE_DIRS})
