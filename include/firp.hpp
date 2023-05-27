@@ -283,7 +283,8 @@ public:
 // convenient type functions
 
 IntType uintType();
-IntType uintType(uint32_t bitWidth);
+UIntType uintType(uint32_t bitWidth);
+SIntType sintType(uint32_t bitWidth);
 IntType bitType();
 ClockType clockType();
 BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
@@ -340,20 +341,31 @@ public:
   FValue extend(size_t width);
 
   uint32_t bitCount();
+  // extract the most significant n bits
+  FValue head(uint32_t n);
+  // drop the most significant n bits
+  FValue tail(uint32_t n);
+  FValue asSInt();
+  FValue asUInt();
 };
 
 FValue lift(Value val);
 FValue cons(uint64_t n, IntType type = IntType::get(firpContext()->context(), false));
+FValue uval(uint64_t n, int32_t bitCount = -1);
+FValue sval(int64_t n, int32_t bitCount = -1);
 FValue mux(FValue cond, FValue pos, FValue neg);
 FValue mux(FValue sel, std::initializer_list<FValue> options);
 FValue zeros(FIRRTLBaseType type);
 FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
 FValue clockToInt(FValue clock);
-FValue cat(std::initializer_list<FValue> values);
 FValue shiftRegister(FValue input, uint32_t delay);
 
-template <class Container>
+//inline FValue operator""_u(unsigned long long n) {
+//  return uint(n);
+//}
+
+template <class Container = std::initializer_list<FValue>>
 FValue cat(Container values) {
   assert(values.size() > 0 && "cat is not defined for 0 arguments");
 
@@ -388,6 +400,24 @@ FValue vector(Container values) {
   ).getResult();
 }
 
+template <class Container = std::initializer_list<FValue>>
+FValue bundleCreate(BundleType type, Container container) {
+  std::vector<Value> values;
+
+  for (auto e : container)
+    values.push_back(e);
+
+  return firpContext()->builder().create<BundleCreateOp>(
+    firpContext()->builder().getUnknownLoc(),
+    type,
+    ArrayRef<Value>(values)
+  ).getResult();
+}
+
+//constexpr FValue operator""_u(unsigned long long int n) {
+//  return FValue();
+//}
+
 class Reg {
   RegResetOp regOp;
   FIRRTLBaseType type;
@@ -399,6 +429,9 @@ public:
   void write(FValue what) { FValue(regOp.getResult()) <<= what; }
   operator FValue() { return read(); }
   void operator<<=(FValue what) { write(what); }
+  FValue operator()(const std::string& fieldName) { return read()(fieldName); }
+  FValue operator()(uint32_t i) { return read()(i); }
+  FValue operator()(uint32_t hi, uint32_t lo) { return read()(hi, lo); }
 };
 
 // mainly used for naming things to make debugging with GTKWave easier

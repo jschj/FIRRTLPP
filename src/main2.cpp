@@ -4,6 +4,8 @@
 #include "AXIStream.hpp"
 #include "AXI4.hpp"
 //#include "esi.hpp"
+#include "ufloat.hpp"
+#include "lowering.hpp"
 
 using namespace firp;
 //using namespace axi4;
@@ -89,7 +91,9 @@ int main(int argc, const char **argv) {
   using namespace ::circt::firrtl;
   using namespace ::mlir;
 
-  initFirpContext(context.get(), "MyTop");
+  //initFirpContext(context.get(), "FPAdd");
+  //initFirpContext(context.get(), "DSPMult");
+  initFirpContext(context.get(), "FPMult");
 
   //llvm::outs()
   //  << firpContext()->moduleBuilder->getSignatureId(123, 456) << "\n"
@@ -107,12 +111,27 @@ int main(int argc, const char **argv) {
   //MyTop myTop(config);
   //myTop.makeTop();
   {
-    MyTop myTop(uintType(32));
-    myTop.makeTop();
+    //MyTop myTop(uintType(32));
+    //myTop.makeTop();
+
+    //ufloat::PipelinedAdder adder(18, 4);
+    //adder.makeTop();
+
+    //ufloat::FPAdd adder(ufloat::UFloatConfig{8, 23});
+    //adder.makeTop();
+
+    //ufloat::DSPMult mult(64);
+    //mult.makeTop();
+
+    ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
+    mult.makeTop();
   }
 
   firpContext()->finish();
   firpContext()->dump();
+
+  assert(succeeded(lowerFirrtlToHw()));
+  assert(succeeded(exportVerilog(".")));
 
   return 0;
 }
