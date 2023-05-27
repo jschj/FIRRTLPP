@@ -23,6 +23,9 @@ struct UFloat : public firp::FValue {
 firp::FValue ufloatUnpack(firp::FValue what, const UFloatConfig& cfg);
 firp::FValue ufloatPack(firp::FValue what, const UFloatConfig& cfg);
 
+uint64_t doubleToUFloatBits(double val, const UFloatConfig& cfg);
+double ufloatBitsToDouble(uint64_t val, const UFloatConfig& cfg);
+
 }
 
 namespace llvm {

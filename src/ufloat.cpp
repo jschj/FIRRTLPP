@@ -30,6 +30,54 @@ FValue ufloatPack(FValue what, const UFloatConfig& cfg) {
   return cat({what("e"), what("m")});
 }
 
+uint64_t doubleToUFloatBits(double val, const UFloatConfig& cfg) {
+  assert(cfg.getWidth() <= 64 && "Cannot convert to ufloat with width > 64");
+  assert(val >= 0.0 && "Cannot convert negative double to ufloat");
+
+  uint64_t raw = *reinterpret_cast<const uint64_t*>(&val);
+
+  // special case for 0
+  if (raw == 0)
+    return 0;
+
+  uint64_t exp = (raw >> 52) & 0x7ff;
+  uint64_t man = raw & 0xfffffffffffff;
+
+  // special case for nan
+  if (exp == 0x7ff && man != 0)
+    return (1ul << (cfg.getWidth() - 1)) - 1;
+
+  uint64_t ufloatBias = (1 << (cfg.exponentWidth - 1)) - 1;
+
+  uint64_t e = exp - 1023 + ufloatBias;
+  uint64_t m = (52 >= cfg.mantissaWidth) ? man >> (52 - cfg.mantissaWidth) : man << (cfg.mantissaWidth - 52);
+
+  // clip the exponent
+  e = std::min(e, (1ul << cfg.exponentWidth) - 1);
+
+  return (e << cfg.mantissaWidth) | m;
+}
+
+double ufloatBitsToDouble(uint64_t val, const UFloatConfig& cfg) {
+  assert(cfg.getWidth() <= 64 && "Cannot convert to ufloat with width > 64");
+
+  if (val == 0)
+    return 0.0;
+  
+  uint64_t exp = val >> cfg.mantissaWidth;
+  uint64_t man = val & ((1ul << cfg.mantissaWidth) - 1);
+
+  uint64_t ufloatBias = (1 << (cfg.exponentWidth - 1)) - 1;
+
+  uint64_t e = exp - ufloatBias + 1023;
+  uint64_t m = (52 >= cfg.mantissaWidth) ? man << (52 - cfg.mantissaWidth) : man >> (cfg.mantissaWidth - 52);
+
+  double result;
+  *reinterpret_cast<uint64_t*>(&result) = (e << 52) | m;
+
+  return result;
+}
+
 std::tuple<FValue, FValue> swapIfGTE(FValue a, FValue b) {
   auto doSwap = a("e") >= b("e");
   return std::make_tuple(
@@ -216,8 +264,32 @@ void FPMult::body() {
 }
 
 void FPConvert::body() {
-  // TODO: implement
-  io("out") <<= io("in");
+  auto uBias = uval((1 << (cfg.exponentWidth - 1)) - 1);
+  auto fBias = uval((1 << (is32Bit ? 7 : 10)) - 1);
+
+  auto exp = io("in") >> cfg.mantissaWidth;
+  auto man = io("in") & uval((1 << cfg.mantissaWidth) - 1);
+
+  auto expBiased = regNext(exp - uBias);
+  auto newExp = regNext(expBiased.read() + fBias);
+
+  FValue newMan;
+
+  if (is32Bit) {
+    if (cfg.mantissaWidth >= 23)
+      newMan = regNext(man >> (cfg.mantissaWidth - 23));
+    else
+      newMan = regNext(man << (23 - cfg.mantissaWidth));
+  } else {
+    if (cfg.mantissaWidth >= 52)
+      newMan = regNext(man >> (cfg.mantissaWidth - 52));
+    else
+      newMan = regNext(man << (52 - cfg.mantissaWidth));
+  }
+
+  newMan = regNext(newMan);
+
+  io("out") <<= cat({newExp, newMan});
 }
 
 }
