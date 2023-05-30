@@ -120,6 +120,7 @@ public:
 
   FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
   FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  FirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName);
 
   OpBuilder& builder() { return opBuilder; }
   MLIRContext *context() { return ctxt; }
@@ -133,7 +134,7 @@ public:
   void beginModuleDeclaration();
   void endModuleDeclaration();
 
-  void finish();
+  FModuleOp finish();
 
   void verify() {
     assert(succeeded(::mlir::verify(root.getOperation(), true)));
@@ -146,6 +147,7 @@ public:
 FirpContext *firpContext();
 void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
 void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+void initFirpContext(CircuitOp circuitOp, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
 
 class ModuleBuilder {
 public:
@@ -564,12 +566,20 @@ public:
     firpContext()->moduleBuilder->setTop(signatureId);
   }
 
+  void removeInstance() {
+    instOp.getOperation()->erase();
+  }
+
   std::string getName() const {
     return name;
   }
 
   std::string getBaseName() const {
     return baseName;
+  }
+
+  FModuleOp getModuleOp() const {
+    return modOp;
   }
 };
 

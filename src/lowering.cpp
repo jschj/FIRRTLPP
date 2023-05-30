@@ -61,4 +61,43 @@ mlir::LogicalResult exportVerilog(const std::string& directory) {
   return pm.run(firpContext()->root);
 }
 
+mlir::LogicalResult setNewTopName(ModuleOp root, const std::string& newTopName) {
+  class RewriteInstance : public OpConversionPattern<circt::firrtl::CircuitOp> {
+    std::string newName;
+  public:
+    RewriteInstance(MLIRContext *ctxt, const std::string& newName):
+      OpConversionPattern(ctxt), newName(newName) {}
+
+    LogicalResult matchAndRewrite(circt::firrtl::CircuitOp op,
+                                  OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override {
+      CircuitOp newOp = rewriter.replaceOpWithNewOp<circt::firrtl::CircuitOp>(op, rewriter.getStringAttr(newName));
+      newOp.getBody().takeBody(op.getBody());
+      return mlir::success();
+    }
+
+  };
+
+  MLIRContext *ctxt = root.getContext();
+
+  ConversionTarget target(*ctxt);
+
+  //target.addLegalDialect<::circt::firrtl::FirrtlDialect>();
+  target.addDynamicallyLegalDialect<::circt::firrtl::FIRRTLDialect>([&](Operation *op) {
+    // returns true if the op is legal
+    circt::firrtl::CircuitOp circuitOp = dyn_cast<circt::firrtl::CircuitOp>(op);
+    bool isLegal = !circuitOp || circuitOp.getName() == newTopName;
+    return isLegal;
+  });
+
+  RewritePatternSet patterns(ctxt);
+  patterns.add<RewriteInstance>(ctxt, newTopName);
+
+  FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+
+  root.dump();
+
+  return applyPartialConversion(root, target, frozenPatterns);
+}
+
 }

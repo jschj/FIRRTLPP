@@ -16,38 +16,6 @@ llvm::hash_code compute_hash(const circt::firrtl::FIRRTLBaseType& t) {
 }
 
 namespace firp {
-/*
-bool DeclaredModules::isDeclared(llvm::hash_code hashValue) {
-  return declaredModules.find(hashValue) != declaredModules.end() ||
-    externalDeclaredModules.find(hashValue) != externalDeclaredModules.end();
-}
-
-void DeclaredModules::addDeclared(llvm::hash_code hashValue, FModuleOp decl) {
-  declaredModules[hashValue] = decl;
-}
-
-FModuleOp DeclaredModules::getDeclared(llvm::hash_code hashValue) {
-  return declaredModules[hashValue];
-}
-
-void DeclaredModules::setTop(llvm::hash_code hashValue) {
-  assert(isDeclared(hashValue));
-  topMod = hashValue;
-}
-
-FModuleOp DeclaredModules::getTop() {
-  assert(topMod.has_value());
-  return declaredModules[topMod.value()];
-}
-
-void DeclaredModules::addDeclared(llvm::hash_code hashValue, FExtModuleOp decl) {
-  externalDeclaredModules[hashValue] = decl;
-}
-
-FExtModuleOp DeclaredModules::getExternalDeclared(llvm::hash_code hashValue) {
-  return externalDeclaredModules[hashValue];
-}
- */
 
 void ModuleBuilder::build(uint32_t sigId) {
   auto constructable = constructables[sigId];
@@ -103,6 +71,18 @@ FirpContext::FirpContext(ModuleOp root, const std::string& topModule, const std:
   opBuilder = circuitOp.getBodyBuilder();
 }
 
+FirpContext::FirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName):
+  opBuilder(ctxt) {
+  this->ctxt = circuitOp.getContext();
+  this->circuitOp = circuitOp;
+  this->defaultClockName = defaultClockName;
+  this->defaultResetName = defaultResetName;
+  this->root = circuitOp->getParentOfType<ModuleOp>();
+  this->moduleBuilder = std::make_unique<ModuleBuilder>();
+
+  opBuilder = circuitOp.getBodyBuilder();
+}
+
 void FirpContext::beginContext(Value clock, Value reset, OpBuilder bodyBuilder) {
   builderStack.push(opBuilder);
   opBuilder = bodyBuilder;
@@ -133,7 +113,7 @@ void FirpContext::endModuleDeclaration() {
   endContext();
 }
 
-void FirpContext::finish() {
+FModuleOp FirpContext::finish() {
   assert(!moduleBuilder->hasUnfinishedConstructions() && "Some modules have not been constructed. Make sure their destructor is called before calling finish().");
 
   // Our top module currently has the name "MyTop_<some hash value>" whereas CircuitOp
@@ -172,6 +152,8 @@ void FirpContext::finish() {
   endContext();
 
   endModuleDeclaration();
+
+  return wrapper;
 }
 
 static std::unique_ptr<FirpContext> ctxt;
@@ -186,6 +168,10 @@ void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const 
 
 void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
   ctxt = std::make_unique<FirpContext>(root, topModule, defaultClockName, defaultResetName);
+}
+
+void initFirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName) {
+  ctxt = std::make_unique<FirpContext>(circuitOp, defaultClockName, defaultResetName);
 }
 
 FValue lift(Value val) {
