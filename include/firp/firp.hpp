@@ -289,7 +289,19 @@ UIntType uintType(uint32_t bitWidth);
 SIntType sintType(uint32_t bitWidth);
 IntType bitType();
 ClockType clockType();
-BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
+
+template <class Container = std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>>>
+BundleType bundleType(Container elements) {
+  std::vector<BundleType::BundleElement> els;
+
+  for (const auto& [name, flip, type] : elements)
+    els.push_back(BundleType::BundleElement(
+      firpContext()->builder().getStringAttr(name), flip, type
+    ));
+
+  return BundleType::get(firpContext()->context(), els);
+}
+
 BundleType readyValidType(FIRRTLBaseType elementType);
 FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix);
 

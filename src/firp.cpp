@@ -620,16 +620,6 @@ ClockType clockType() {
   return ClockType::get(firpContext()->context());
 }
 
-BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements) {
-  std::vector<BundleType::BundleElement> els;
-  for (const auto& [name, flip, type] : elements)
-    els.push_back(BundleType::BundleElement(
-      firpContext()->builder().getStringAttr(name), flip, type
-    ));
-
-  return BundleType::get(firpContext()->context(), els);
-}
-
 BundleType readyValidType(FIRRTLBaseType elementType) {
   return bundleType({
     {"ready", true, bitType()},
