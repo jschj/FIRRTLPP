@@ -305,6 +305,14 @@ FValue shiftRegister(FValue input, uint32_t delay) {
   return result;
 }
 
+Value hwStructCast(Value input, Type targetType) {
+  return firpContext()->builder().create<HWStructCastOp>(
+    firpContext()->builder().getUnknownLoc(),
+    targetType,
+    input
+  ).getResult();
+}
+
 FValue FValue::operator~() {
   return firpContext()->builder().create<NotPrimOp>(firpContext()->builder().getUnknownLoc(), *this).getResult();
 }
@@ -380,6 +388,14 @@ FValue FValue::operator()(const std::string& fieldName) {
 
 FValue FValue::operator[](FValue index) {
   return firpContext()->builder().create<SubaccessOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this,
+    index
+  ).getResult();
+}
+
+FValue FValue::operator[](size_t index) {
+  return firpContext()->builder().create<SubindexOp>(
     firpContext()->builder().getUnknownLoc(),
     *this,
     index
@@ -652,6 +668,10 @@ FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix) {
 
   return bundleType(newElements);
 }*/
+
+FVectorType vectorType(FIRRTLBaseType elementType, uint32_t n) {
+  return FVectorType::get(elementType, n);
+}
 
 Memory::Memory(FIRRTLBaseType dataType, size_t depth): dataType(dataType) {
   //size_t addrBits = clog2(depth - 1);

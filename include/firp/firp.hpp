@@ -304,6 +304,7 @@ BundleType bundleType(Container elements) {
 
 BundleType readyValidType(FIRRTLBaseType elementType);
 FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix);
+FVectorType vectorType(FIRRTLBaseType elementType, uint32_t n);
 
 class ConnectResult {
   bool successful;
@@ -337,10 +338,14 @@ public:
   FValue operator==(FValue other);
   FValue operator!=(FValue other);
 
+  // bit extraction
   FValue operator()(size_t hi, size_t lo);
   FValue operator()(size_t index);
+  // struct field extraction
   FValue operator()(const std::string& fieldName);
+  // vector extraction (dynamic and static)
   FValue operator[](FValue index);
+  FValue operator[](size_t index);
 
   FValue operator<<(uint32_t amount);
   FValue operator>>(uint32_t amount);
@@ -374,6 +379,8 @@ FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
 FValue clockToInt(FValue clock);
 FValue shiftRegister(FValue input, uint32_t delay);
+
+Value hwStructCast(Value input, Type targetType);
 
 //inline FValue operator""_u(unsigned long long n) {
 //  return uint(n);
@@ -473,10 +480,10 @@ FValue named(FValue what, const std::string& name);
 struct Port {
   std::string name;
   bool isInput;
-  FIRRTLBaseType type;
+  Type type;
 
   Port() {}
-  Port(const std::string& name, bool isInput, FIRRTLBaseType type):
+  Port(const std::string& name, bool isInput, Type type):
     name(name), isInput(isInput), type(type) {}
 };
 
