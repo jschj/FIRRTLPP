@@ -157,10 +157,13 @@ async def test_fpadd(dut):
     cocotb.fork(clock.start())
 
     random.seed(123456)
+    DELAY = 6 # for 31 bit ufloat
 
     await reset(dut)
 
-    for i in range(10):
+    results = []
+
+    for i in range(100):
         # Generate random inputs
         a = np.float32(random.uniform(0.0, 100.0))
         b = np.float32(random.uniform(0.0, 100.0))
@@ -168,24 +171,20 @@ async def test_fpadd(dut):
         # Compute the expected output
         expected_output = a + b
 
-        assert type(expected_output) == np.float32
-
         # Convert inputs and expected output to integers
         a_int = float_to_int(a)
         b_int = float_to_int(b)
         expected_output_int = float_to_int(expected_output)
 
-        #print(f'a_int={a_int} b_int={b_int}')
-
         # Write inputs to the DUT
-        dut.a <= a_int
-        dut.b <= b_int
+        dut.io_a <= a_int
+        dut.io_b <= b_int
 
         # Wait for the DUT to compute the output
-        await Timer(10, units="ns")
+        await Timer(2, units="ns")
 
         # Read the output from the DUT
-        c_int = int(dut.c)
+        c_int = int(dut.io_r)
 
         # Convert the output to a float
         c = int_to_float(c_int)
@@ -194,10 +193,14 @@ async def test_fpadd(dut):
         #assert abs(c - expected_output) < 1e-6
         #print(f'got {c} exp {expected_output}')
         #print(f'got {c_int} exp {expected_output_int}')
-        print(f'------------------sample {i}------------------')
+        #print(f'------------------sample {i}------------------')
         
-        print(f'a = {format(a_int, "032b")} ({a})')
-        print(f'b = {format(b_int, "032b")} ({b})')
+        #print(f'a = {format(a_int, "032b")} ({a})')
+        #print(f'b = {format(b_int, "032b")} ({b})')
 
-        print(f'got {bin(c_int)[2:]} ({hex(c_int)}) ({int_to_float(c_int)})')
-        print(f'exp {bin(expected_output_int)[2:]} ({hex(expected_output_int)}) ({int_to_float(expected_output_int)})')
+        #print(f'got {bin(c_int)[2:]} ({hex(c_int)}) ({int_to_float(c_int)})')
+        #print(f'exp {bin(expected_output_int)[2:]} ({hex(expected_output_int)}) ({int_to_float(expected_output_int)})')
+
+        results.append(c)
+
+    np.savetxt('old.csv', np.array(results), delimiter=';')
