@@ -9,7 +9,7 @@ void PipelinedAdder::body() {
   // inspired by http://vlsigyan.com/pipeline-adder-verilog-code/
 
   if (bitWidth <= maxAdderWidth) {
-    io("c") <<= io("a") + io("b");
+    io("c") <<= regNext(io("a") + io("b"));
     return;
   }
 

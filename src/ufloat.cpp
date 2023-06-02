@@ -176,6 +176,7 @@ void FPAdd::body() {
   auto minuend_is_zero_4 = shiftRegister(minuend_is_zero_3, adder.getDelay());
   auto e1_4 = shiftRegister(e1_3, adder.getDelay());
 
+  SHOW(e1_4);
   SHOW(mantissaSum);
 
   // stage 5: shift sum if necessary and increment exponent
@@ -184,10 +185,11 @@ void FPAdd::body() {
 
   SHOW(shiftedMantissaOut);
   SHOW(shiftedMantissaShifted);
+  SHOW(m_6);
 
   io("c") <<= cat({
     exponentAdder(e1_4, shiftedMantissaShifted, minuend_is_zero_4),
-    regNext(m_6)
+    m_6
   });
 }
 
@@ -306,7 +308,7 @@ uint32_t ufloatFPAddDelay(const UFloatConfig& cfg) {
 uint32_t ufloatFPMultDelay(const UFloatConfig& cfg) {
   auto tiles = getDSPTiles(cfg.mantissaWidth + 1);
   uint32_t dspDelay = clog2(tiles.size() + 1);
-  return dspDelay + 1;
+  return dspDelay + 1 + 1;
 }
 
 uint32_t ufloatFPConvertDelay(const UFloatConfig& cfg) {
