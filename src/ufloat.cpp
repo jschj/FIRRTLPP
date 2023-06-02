@@ -187,7 +187,7 @@ void FPAdd::body() {
 
   io("c") <<= cat({
     exponentAdder(e1_4, shiftedMantissaShifted, minuend_is_zero_4),
-    m_6
+    regNext(m_6)
   });
 }
 
@@ -195,8 +195,8 @@ FValue isEitherZero(FValue a, FValue b) {
   uint32_t m = a("m").bitCount();
   uint32_t e = a("e").bitCount();
 
-  return (a("e") == uval(0, e) & a("m") == uval(0, m)) |
-         (b("e") == uval(0, e) & b("m") == uval(0, m));
+  return ((a("e") == uval(0, e)) & (a("m") == uval(0, m))) |
+         ((b("e") == uval(0, e)) & (b("m") == uval(0, m)));
 }
 
 FValue addExponents(FValue e1, FValue e2) {
@@ -267,29 +267,32 @@ void FPConvert::body() {
   auto uBias = uval((1 << (cfg.exponentWidth - 1)) - 1);
   auto fBias = uval((1 << (is32Bit ? 7 : 10)) - 1);
 
-  auto exp = io("in") >> cfg.mantissaWidth;
-  auto man = io("in") & uval((1 << cfg.mantissaWidth) - 1);
+  assert((1 << (cfg.exponentWidth - 1)) - 1 == (1 << (is32Bit ? 7 : 10)) - 1);
 
-  auto expBiased = regNext(exp - uBias);
-  auto newExp = regNext(expBiased.read() + fBias);
+  auto exp = wireInit(io("in") >> cfg.mantissaWidth, "exp");
+  auto man = wireInit((io("in") & uval((1 << cfg.mantissaWidth) - 1))(cfg.getWidth() - cfg.exponentWidth - 1, 0), "man").read();
+
+  auto expBiased = regNext(exp.read() - uBias, "expBiased");
+  auto newExp = regNext(expBiased.read() + fBias, "newExp");
+  auto expCut = wireInit(newExp.read().tail(newExp.read().bitCount() - (is32Bit ? 8 : 11)), "expCut");
 
   FValue newMan;
 
   if (is32Bit) {
     if (cfg.mantissaWidth >= 23)
-      newMan = regNext(man >> (cfg.mantissaWidth - 23));
+      newMan = regNext(man >> (cfg.mantissaWidth - 23), "newMan");
     else
-      newMan = regNext(man << (23 - cfg.mantissaWidth));
+      newMan = regNext(man << (23 - cfg.mantissaWidth), "newMan");
   } else {
     if (cfg.mantissaWidth >= 52)
-      newMan = regNext(man >> (cfg.mantissaWidth - 52));
+      newMan = regNext(man >> (cfg.mantissaWidth - 52), "newMan");
     else
-      newMan = regNext(man << (52 - cfg.mantissaWidth));
+      newMan = regNext(man << (52 - cfg.mantissaWidth), "newMan");
   }
 
   newMan = regNext(newMan);
 
-  io("out") <<= cat({newExp, newMan});
+  io("out") <<= cat({expCut.read(), newMan});
 }
 
 }
@@ -297,7 +300,7 @@ void FPConvert::body() {
 namespace ufloat::scheduling {
 
 uint32_t ufloatFPAddDelay(const UFloatConfig& cfg) {
-  return PipelinedAdder::getDelay(cfg.mantissaWidth + 1, 32) + 3;
+  return PipelinedAdder::getDelay(cfg.mantissaWidth + 1, 32) + 5;
 }
 
 uint32_t ufloatFPMultDelay(const UFloatConfig& cfg) {
