@@ -304,7 +304,7 @@ uint32_t ufloatFPAddDelay(const UFloatConfig& cfg) {
 }
 
 uint32_t ufloatFPMultDelay(const UFloatConfig& cfg) {
-  auto tiles = getDSPTiles(cfg.getWidth());
+  auto tiles = getDSPTiles(cfg.mantissaWidth + 1);
   uint32_t dspDelay = clog2(tiles.size() + 1);
   return dspDelay + 1;
 }
@@ -336,7 +336,7 @@ void generateFPAdd() {
   }
 
   firpContext()->finish();
-  firpContext()->dump();
+  //firpContext()->dump();
 
   assert(succeeded(lowerFirrtlToHw()));
   assert(succeeded(exportVerilog(".")));
@@ -361,7 +361,9 @@ void generateFPMult() {
   }
 
   firpContext()->finish();
-  firpContext()->dump();
+  //firpContext()->dump();
+
+  llvm::outs() << "mult delay: " << ufloat::scheduling::ufloatFPMultDelay(ufloat::UFloatConfig{8, 23}) << "\n";
 
   assert(succeeded(lowerFirrtlToHw()));
   assert(succeeded(exportVerilog(".")));
