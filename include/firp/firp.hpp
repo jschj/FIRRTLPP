@@ -366,6 +366,8 @@ public:
   FValue tail(uint32_t n);
   FValue asSInt();
   FValue asUInt();
+  // horizontally fold bits with or operation
+  FValue orr();
 };
 
 FValue lift(Value val);
@@ -435,6 +437,26 @@ FValue bundleCreate(BundleType type, Container container) {
   ).getResult();
 }
 
+template <class Iterator>
+FValue treeFold(Iterator begin, Iterator end, const std::function<FValue(FValue, FValue)>& associativeOp) {
+  size_t size = std::distance(begin, end);
+  
+  assert(size > 0 && "treeFold is not defined for 0 arguments");
+
+  if (size == 1)
+    return *begin;
+
+  if (size == 2)
+    return associativeOp(*begin, *(begin + 1));
+
+  size_t half = size / 2;
+
+  FValue lhs = treeFold(begin, begin + half, associativeOp);
+  FValue rhs = treeFold(begin + half, end, associativeOp);
+
+  return associativeOp(lhs, rhs);
+}
+
 //constexpr FValue operator""_u(unsigned long long int n) {
 //  return FValue();
 //}
@@ -474,6 +496,7 @@ public:
 // Chisel-like convenience functions
 Reg regNext(FValue what, const std::string& name = "");
 Reg regInit(FValue init, const std::string& name = "");
+Reg regNextWhen(FValue what, FValue cond, const std::string& name = "");
 Wire wireInit(FValue what, const std::string& name = "");
 FValue named(FValue what, const std::string& name);
 

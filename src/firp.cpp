@@ -518,6 +518,13 @@ FValue FValue::asUInt() {
   ).getResult();
 }
 
+FValue FValue::orr() {
+  return firpContext()->builder().create<OrRPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this
+  ).getResult();
+}
+
 Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(type) {
   regOp = firpContext()->builder().create<RegResetOp>(
     firpContext()->builder().getUnknownLoc(),
@@ -549,6 +556,12 @@ Reg regNext(FValue what, const std::string& name) {
 
 Reg regInit(FValue init, const std::string& name) {
   Reg reg(llvm::dyn_cast<FIRRTLBaseType>(init.getType()), init, name);
+  return reg;
+}
+
+Reg regNextWhen(FValue what, FValue cond, const std::string& name) {
+  Reg reg(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name);
+  when (cond, [&]() { reg <<= what; });
   return reg;
 }
 
