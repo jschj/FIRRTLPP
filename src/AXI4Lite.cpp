@@ -115,7 +115,8 @@ void AXI4LiteRegisterFile::body() {
   // reading
   auto readIndex = readAddr.io("deq")("bits") / uval((cfg.dataBits / 8));
   auto readValid = readAddr.io("deq")("valid");
-  readResp.io("enq")("bits") <<= mux(readValid, vector(regs)[readIndex], uval(0, cfg.dataBits));
+  regVector = vector(regs);
+  readResp.io("enq")("bits") <<= mux(readValid, regVector[readIndex], uval(0, cfg.dataBits));
   readResp.io("enq")("valid") <<= readAddr.io("deq")("valid");
   readAddr.io("deq")("ready") <<= readResp.io("enq")("ready");
 
@@ -126,6 +127,16 @@ void AXI4LiteRegisterFile::body() {
 
   // can only process read addresses when there is space for a response
   readAddr.io("deq")("ready") <<= readResp.io("enq")("ready");
+}
+
+FValue AXI4LiteRegisterFile::io(const std::string& name) {
+  uint32_t index = 0;
+
+  for (const auto& regName : registers)
+    if (regName == name)
+      return regVector[index++];
+
+  return Module<AXI4LiteRegisterFile>::io(name);
 }
 
 }

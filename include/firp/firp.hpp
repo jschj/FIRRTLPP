@@ -691,6 +691,29 @@ public:
   }
 };
 
+class FIRModule {
+  FModuleOp modOp;
+  InstanceOp instOp;
+  std::unordered_map<std::string, uint32_t> portIndices;
+public:
+  FIRModule(FModuleOp modOp) {
+    this->modOp = modOp;
+    this->instOp = firpContext()->builder().create<InstanceOp>(
+      firpContext()->builder().getUnknownLoc(),
+      modOp,
+      firpContext()->builder().getStringAttr(modOp.getName().str() + "_instance")
+    );
+
+    uint32_t index = 0;
+    for (const PortInfo& portInfo: modOp.getPorts())
+      portIndices[portInfo.getName().str()] = index++;
+  }
+
+  FValue io(const std::string& name) {
+    return instOp.getResults()[portIndices.at(name)];
+  }
+};
+
 class Conditional {
 public:
   typedef std::function<void()> BodyCtor;

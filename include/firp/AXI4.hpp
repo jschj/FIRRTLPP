@@ -31,3 +31,39 @@ BundleType axi4ReadChannelType(const AXI4Config& config);
 BundleType axi4Type(const AXI4Config& writeConfig, const AXI4Config& readConfig);
 
 }
+
+// hashing support
+namespace llvm {
+
+template <>
+struct DenseMapInfo<axi4::AXI4Config> {
+
+  typedef std::tuple<uint32_t, uint32_t, uint32_t, uint32_t> tuple_t;
+private:
+  static tuple_t toTuple(const axi4::AXI4Config& val) {
+    return std::make_tuple(val.addrBits, val.dataBits, val.idBits, val.userBits);
+  }
+
+  static axi4::AXI4Config fromTuple(const tuple_t& val) {
+    return axi4::AXI4Config {
+      .addrBits = std::get<0>(val),
+      .dataBits = std::get<1>(val),
+      .idBits   = std::get<2>(val),
+      .userBits = std::get<3>(val)
+    };
+  }
+public:
+  static inline axi4::AXI4Config getEmptyKey() { return fromTuple(DenseMapInfo<tuple_t>::getEmptyKey()); }
+  static inline axi4::AXI4Config getTombstoneKey() { return fromTuple(DenseMapInfo<tuple_t>::getTombstoneKey()); }
+
+  static unsigned getHashValue(const axi4::AXI4Config& Val) {
+    return DenseMapInfo<tuple_t>::getHashValue(toTuple(Val));
+  }
+
+  static bool isEqual(const axi4::AXI4Config& LHS,
+                      const axi4::AXI4Config& RHS) {
+    return DenseMapInfo<tuple_t>::isEqual(toTuple(LHS), toTuple(RHS));
+  }
+};
+
+}

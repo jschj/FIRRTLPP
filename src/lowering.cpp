@@ -2,10 +2,18 @@
 
 #include "circt/Conversion/FIRRTLToHW.h"
 #include "circt/Conversion/ExportVerilog.h"
+
 #include "circt/Dialect/FIRRTL/Passes.h"
+#include "circt/Dialect/FIRRTL/FIRParser.h"
+
 #include "circt/Dialect/Seq/SeqPasses.h"
+
 #include "circt/Dialect/SV/SVPasses.h"
+
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Support/Timing.h"
+
+#include "llvm/Support/SourceMgr.h"
 
 
 namespace firp {
@@ -98,6 +106,20 @@ mlir::LogicalResult setNewTopName(ModuleOp root, const std::string& newTopName) 
   root.dump();
 
   return applyPartialConversion(root, target, frozenPatterns);
+}
+
+mlir::OwningOpRef<mlir::ModuleOp> importFIRFile(const std::filesystem::path& path) {
+  mlir::MLIRContext *ctxt = firpContext()->context();
+
+  llvm::SourceMgr sourceMgr;
+  std::string includedFile;
+  sourceMgr.AddIncludeFile(path.string(), llvm::SMLoc(), includedFile);
+
+  TimingScope ts;
+
+  mlir::OwningOpRef<mlir::ModuleOp> mod = circt::firrtl::importFIRFile(sourceMgr, ctxt, ts, {});
+
+  return mod;
 }
 
 }

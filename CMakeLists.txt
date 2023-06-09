@@ -23,4 +23,5 @@ target_link_libraries(firp PRIVATE ${LIBS}
   CIRCTSeqTransforms
   CIRCTSVTransforms
   CIRCTExportVerilog
+  CIRCTImportFIRFile
 )

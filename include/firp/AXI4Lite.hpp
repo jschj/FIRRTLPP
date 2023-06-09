@@ -22,6 +22,7 @@ firp::BundleType axi4LiteType(const AXI4LiteConfig& config);
 class AXI4LiteRegisterFile : public firp::Module<AXI4LiteRegisterFile> {
   AXI4LiteConfig cfg;
   std::vector<std::string> registers;
+  firp::FValue regVector;
 public:
   AXI4LiteRegisterFile(const AXI4LiteConfig& cfg, std::initializer_list<std::string> registers):
     firp::Module<AXI4LiteRegisterFile>(
@@ -34,6 +35,8 @@ public:
     cfg(cfg), registers(registers) { build(); }
 
   void body();
+
+  firp::FValue io(const std::string& name);
 };
 
 }
@@ -55,7 +58,7 @@ private:
       .addrBits = std::get<0>(val),
       .dataBits = std::get<1>(val),
       .protBits = std::get<2>(val),
-      .respBits = std::get<2>(val)
+      .respBits = std::get<3>(val)
     };
   }
 public:
