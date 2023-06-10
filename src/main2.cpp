@@ -93,7 +93,7 @@ int main(int argc, const char **argv) {
 
   //initFirpContext(context.get(), "FPAdd");
   //initFirpContext(context.get(), "DSPMult");
-  initFirpContext(context.get(), "FPMult");
+  createFirpContext(context.get(), "FPMult");
 
   //llvm::outs()
   //  << firpContext()->moduleBuilder->getSignatureId(123, 456) << "\n"

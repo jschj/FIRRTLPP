@@ -98,6 +98,7 @@ public:
 
 class ModuleBuilder;
 
+// TODO: fix this mess
 class FirpContext {
 public:
   MLIRContext *ctxt;
@@ -112,15 +113,18 @@ public:
   std::stack<Value> clockStack;
   std::stack<Value> resetStack;
 
-  std::string defaultClockName;
-  std::string defaultResetName;
+  std::string defaultClockName = "clock";
+  std::string defaultResetName = "reset";
 public:
   //DeclaredModules declaredModules;
   std::unique_ptr<ModuleBuilder> moduleBuilder;
 
-  FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
-  FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
-  FirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName);
+  FirpContext(MLIRContext *ctxt):
+    ctxt(ctxt), opBuilder(ctxt) {}
+
+  //FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  //FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  //FirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName);
 
   OpBuilder& builder() { return opBuilder; }
   MLIRContext *context() { return ctxt; }
@@ -134,7 +138,7 @@ public:
   void beginModuleDeclaration();
   void endModuleDeclaration();
 
-  FModuleOp finish();
+  LogicalResult finish();
 
   void verify() {
     assert(succeeded(::mlir::verify(root.getOperation(), true)));
@@ -145,9 +149,13 @@ public:
 };
 
 FirpContext *firpContext();
-void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
-void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
-void initFirpContext(CircuitOp circuitOp, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+//void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+//void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+//void initFirpContext(CircuitOp circuitOp, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+
+void createFirpContext(MLIRContext *ctxt, StringRef circuitName);
+void attachFirpContext(ModuleOp modOp, StringRef circuitName);
+void attachFirpContext(CircuitOp circuitOp);
 
 class ModuleBuilder {
 public:
@@ -612,9 +620,46 @@ public:
       return modOp.getBodyBlock()->getArguments()[index];
   }
 
-  void makeTop() {
-    instOp.getOperation()->erase();
-    firpContext()->moduleBuilder->setTop(signatureId);
+  FModuleOp makeTop() {
+    //removeInstance();
+
+    //firpContext()->moduleBuilder->setTop(signatureId);
+
+    // build a wrapper module with the base name
+    firpContext()->beginModuleDeclaration();
+
+    FModuleOp wrapperOp = firpContext()->builder().create<FModuleOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(baseName),
+      ConventionAttr::get(firpContext()->context(), Convention::Internal),
+      modOp.getPorts()
+    );
+    llvm::outs() << "created wrapper module for " << baseName << "\n";
+
+    Value newClock = wrapperOp.getBodyBlock()->getArgument(0);
+    Value newReset = wrapperOp.getBodyBlock()->getArgument(1);
+    firpContext()->beginContext(newClock, newReset, wrapperOp.getBodyBuilder());
+    llvm::outs() << "began new context\n";
+
+    InstanceOp cloned = cast<InstanceOp>(instOp->clone());
+    instOp->erase();
+    firpContext()->builder().insert(cloned);
+    //instOp->erase();
+
+    for (size_t i = 0; i < wrapperOp.getNumPorts(); ++i) {
+      FValue arg = wrapperOp.getArguments()[i];
+      FValue res = cloned.getResults()[i];
+
+      if (modOp.getPorts()[i].direction == Direction::In)
+        res <<= arg;
+      else
+        arg <<= res;
+    }
+
+    firpContext()->endContext();
+    firpContext()->endModuleDeclaration();
+
+    return wrapperOp;
   }
 
   void removeInstance() {

@@ -36,7 +36,7 @@ void ModuleBuilder::build(uint32_t sigId) {
 
   constructed.insert(sigId);
 }
-
+/*
 FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
   ctxt(ctxt), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName),
   moduleBuilder(std::make_unique<ModuleBuilder>()) {
@@ -84,7 +84,7 @@ FirpContext::FirpContext(CircuitOp circuitOp, const std::string& defaultClockNam
 
   opBuilder = circuitOp.getBodyBuilder();
 }
-
+*/
 void FirpContext::beginContext(Value clock, Value reset, OpBuilder bodyBuilder) {
   builderStack.push(opBuilder);
   opBuilder = bodyBuilder;
@@ -115,11 +115,13 @@ void FirpContext::endModuleDeclaration() {
   endContext();
 }
 
-FModuleOp FirpContext::finish() {
+LogicalResult FirpContext::finish() {
   assert(!moduleBuilder->hasUnfinishedConstructions() && "Some modules have not been constructed. Make sure their destructor is called before calling finish().");
 
   // Our top module currently has the name "MyTop_<some hash value>" whereas CircuitOp
   // is called MyTop. We construct a module named MyTop that wraps MyTop_<some hash value>.
+
+  return ::mlir::verify(root.getOperation(), true);
 
   beginModuleDeclaration();
 
@@ -155,7 +157,7 @@ FModuleOp FirpContext::finish() {
 
   endModuleDeclaration();
 
-  return wrapper;
+  //return wrapper;
 }
 
 static std::unique_ptr<FirpContext> ctxt;
@@ -164,16 +166,57 @@ FirpContext *firpContext() {
   return ctxt.get();
 }
 
-void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
-  ctxt = std::make_unique<FirpContext>(mlirCtxt, topModule, defaultClockName, defaultResetName);
+void createFirpContext(MLIRContext *_ctxt, StringRef circuitName) {
+  ctxt = std::make_unique<FirpContext>(_ctxt);
+  
+  firpContext()->root = firpContext()->builder()
+    .create<ModuleOp>(firpContext()->builder().getUnknownLoc());
+
+  firpContext()->builder()
+    .setInsertionPointToStart(&firpContext()->root.getBodyRegion().front());
+
+  firpContext()->circuitOp = firpContext()->builder()
+    .create<CircuitOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(circuitName)
+  );
+
+  firpContext()->opBuilder = firpContext()->circuitOp.getBodyBuilder();
+  firpContext()->moduleBuilder = std::make_unique<ModuleBuilder>();  
 }
 
-void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
-  ctxt = std::make_unique<FirpContext>(root, topModule, defaultClockName, defaultResetName);
+void attachFirpContext(ModuleOp modOp, StringRef circuitName) {
+  ctxt = std::make_unique<FirpContext>(modOp.getContext());
+  
+  firpContext()->root = modOp;
+
+  firpContext()->builder()
+    .setInsertionPointToStart(&firpContext()->root.getBodyRegion().front());
+
+  // Is a CircuitOp already present?
+  modOp.getBodyRegion().front().walk([&](CircuitOp op) {
+    firpContext()->circuitOp = op;
+  });
+
+  if (!firpContext()->circuitOp)
+    firpContext()->circuitOp = firpContext()->builder()
+      .create<CircuitOp>(
+        firpContext()->builder().getUnknownLoc(),
+        firpContext()->builder().getStringAttr(circuitName)
+    );
+
+  firpContext()->opBuilder = firpContext()->circuitOp.getBodyBuilder();
+  firpContext()->moduleBuilder = std::make_unique<ModuleBuilder>();  
 }
 
-void initFirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName) {
-  ctxt = std::make_unique<FirpContext>(circuitOp, defaultClockName, defaultResetName);
+void attachFirpContext(CircuitOp circuitOp) {
+  ctxt = std::make_unique<FirpContext>(circuitOp.getContext());
+
+  firpContext()->ctxt = circuitOp.getContext();
+  firpContext()->root = circuitOp->getParentOfType<ModuleOp>();
+  firpContext()->circuitOp = circuitOp;
+  firpContext()->opBuilder = circuitOp.getBodyBuilder();
+  firpContext()->moduleBuilder = std::make_unique<ModuleBuilder>();  
 }
 
 FValue lift(Value val) {

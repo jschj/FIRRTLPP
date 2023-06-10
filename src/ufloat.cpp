@@ -330,7 +330,7 @@ void generateFPAdd() {
   assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
   assert(context->getOrLoadDialect<circt::sv::SVDialect>());
 
-  initFirpContext(context.get(), "FPAdd");
+  createFirpContext(context.get(), "FPAdd");
 
   {
     ufloat::FPAdd add(ufloat::UFloatConfig{8, 23});
@@ -355,7 +355,7 @@ void generateFPMult() {
   assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
   assert(context->getOrLoadDialect<circt::sv::SVDialect>());
 
-  initFirpContext(context.get(), "FPMult");
+  createFirpContext(context.get(), "FPMult");
 
   {
     ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
