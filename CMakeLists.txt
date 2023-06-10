@@ -9,6 +9,7 @@ add_library(firp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pipelinedAdder.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ESI.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AXI4Lite.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/AXI4.cpp
 )
 target_include_directories(firp PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include/

@@ -29,6 +29,7 @@ BundleType axi4LiteResponseChannelType(const AXI4LiteConfig& config) {
   return bundleType({
     {"VALID", false, bitType()},
     {"READY", true, bitType()},
+    {"DATA", false, uintType(config.dataBits)},
     {"RESP", false, uintType(config.respBits)}
   });
 }

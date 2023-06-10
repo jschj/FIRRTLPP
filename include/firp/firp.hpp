@@ -595,12 +595,21 @@ public:
     // io() behaves differently depending on whether we are inside the currently
     // declared modules or are talking to the ports of an instance.
 
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    uint32_t index = it->second;
+
     bool isFromOutside = !firpContext()->moduleBuilder->isInBodyOf(signatureId);
 
     if (isFromOutside)
-      return instOp.getResults()[portIndices.at(name)];
+      return instOp.getResults()[index];
     else
-      return modOp.getBodyBlock()->getArguments()[portIndices.at(name)];
+      return modOp.getBodyBlock()->getArguments()[index];
   }
 
   void makeTop() {
@@ -683,7 +692,15 @@ public:
 
   FValue io(const std::string& name) {
     // Connection always happens from outside with external modules.
-    return instOp.getResults()[portIndices.at(name)];
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    uint32_t index = it->second;
+    return instOp.getResults()[index];
   }
 
   StringRef getInstanceName() {
@@ -707,10 +724,22 @@ public:
     uint32_t index = 0;
     for (const PortInfo& portInfo: modOp.getPorts())
       portIndices[portInfo.getName().str()] = index++;
+
+    llvm::outs() << "instantiated " << modOp.getName() << " with the following ports:\n";
+    for (const PortInfo& portInfo: modOp.getPorts())
+      llvm::outs() << "  " << portInfo.getName() << "\n";
   }
 
   FValue io(const std::string& name) {
-    return instOp.getResults()[portIndices.at(name)];
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    uint32_t index = it->second;
+    return instOp.getResults()[index];
   }
 };
 

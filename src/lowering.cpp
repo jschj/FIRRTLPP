@@ -103,12 +103,10 @@ mlir::LogicalResult setNewTopName(ModuleOp root, const std::string& newTopName) 
 
   FrozenRewritePatternSet frozenPatterns(std::move(patterns));
 
-  root.dump();
-
   return applyPartialConversion(root, target, frozenPatterns);
 }
 
-mlir::OwningOpRef<mlir::ModuleOp> importFIRFile(const std::filesystem::path& path) {
+mlir::ModuleOp importFIRFile(const std::filesystem::path& path) {
   mlir::MLIRContext *ctxt = firpContext()->context();
 
   llvm::SourceMgr sourceMgr;
@@ -119,7 +117,7 @@ mlir::OwningOpRef<mlir::ModuleOp> importFIRFile(const std::filesystem::path& pat
 
   mlir::OwningOpRef<mlir::ModuleOp> mod = circt::firrtl::importFIRFile(sourceMgr, ctxt, ts, {});
 
-  return mod;
+  return mod.release();
 }
 
 }

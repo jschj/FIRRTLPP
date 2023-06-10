@@ -21,8 +21,8 @@ BundleType AXIStreamBundleType(const AXIStreamConfig& config) {
 
 BundleType withLast(FIRRTLBaseType type) {
   return bundleType({
-    {"bits", false, type},
-    {"last", false, bitType()}
+    {"last", false, bitType()},
+    {"bits", false, type}
   });
 }
 
