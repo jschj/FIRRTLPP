@@ -178,6 +178,11 @@ private:
   uint32_t uid = 0;
   FModuleOp topOp;
 public:
+  void setInitialUid(uint32_t uid) {
+    assert(this->uid == 0 && "uid already set");
+    this->uid = uid;
+  }
+
   // All args must implement DenseMapInfo. Use StringRef instead of std::string.
   template <class...Args>
   uint32_t getSignatureId(Args...args) {
