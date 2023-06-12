@@ -46,15 +46,19 @@ void MultiRingBuffer::body() {
   // deq logic
   io("deq")("valid") <<= wouldNotOvertake(outPtr, uval(outByteWidth, ptrWidth), inPtr);
 
-  auto deqBits = vector(std::vector<FValue>(outByteWidth, uval(0, 8)));
-  io("deq")("bits") <<= deqBits;
-
   when(doesFire(io("deq")), [&](){
+    std::vector<FValue> elementValues;  
+
     for (uint32_t i = 0; i < outByteWidth; ++i)
-      deqBits[i] <<= buf.read()[nextPtr(outPtr, uval(i + 1))];
+      elementValues.push_back(buf.read()[nextPtr(outPtr, uval(i + 1))]);
+
+    io("deq")("bits") <<= cat(elementValues);
 
     outPtr <<= nextPtr(outPtr, uval(outByteWidth));
-  });  
+  }).otherwise([&](){
+    std::vector<FValue> elementValues(outByteWidth, uval(0, 8));
+    io("deq")("bits") <<= cat(elementValues);
+  });
 }
 
 void AXIStreamConverter::body() {
@@ -64,13 +68,13 @@ void AXIStreamConverter::body() {
 
   auto buf = MultiRingBuffer(inByteWidth, outByteWidth, slotCount);
 
-  buf.io("enq")("bits") <<= io("AXIS_slave")("tdata");
-  buf.io("enq")("valid") <<= io("AXIS_slave")("tvalid");
-  io("AXIS_slave")("tready") <<= buf.io("enq")("ready");
+  buf.io("enq")("bits") <<= io("AXIS_slave")("TDATA");
+  buf.io("enq")("valid") <<= io("AXIS_slave")("TVALID");
+  io("AXIS_slave")("TREADY") <<= buf.io("enq")("ready");
 
-  buf.io("deq")("ready") <<= io("AXIS_master")("tready");
-  io("AXIS_master")("tdata") <<= buf.io("deq")("bits");
-  io("AXIS_master")("tvalid") <<= buf.io("deq")("valid");
+  buf.io("deq")("ready") <<= io("AXIS_master")("TREADY");
+  io("AXIS_master")("TDATA") <<= buf.io("deq")("bits");
+  io("AXIS_master")("TVALID") <<= buf.io("deq")("valid");
 
   // To correctly tag the last word as last the following conditions must hold:
   // 1. Last was received from an input before.
@@ -82,7 +86,7 @@ void AXIStreamConverter::body() {
 
   when(doesFire(buf.io("enq")), [&](){
     inByteCount <<= inByteCount.read() + uval(inByteWidth);
-    receivedLast <<= receivedLast.read() | io("AXIS_slave")("tlast");
+    receivedLast <<= receivedLast.read() | io("AXIS_slave")("TLAST");
   });
 
   when(doesFire(buf.io("deq")), [&](){
@@ -90,14 +94,14 @@ void AXIStreamConverter::body() {
   });
 
   wouldOutByteCount <<= outByteCount.read() + uval(outByteWidth);
-  io("AXIS_master")("tlast") <<= receivedLast.read() & (inByteCount.read() == wouldOutByteCount.read());
+  io("AXIS_master")("TLAST") <<= receivedLast.read() & (inByteCount.read() == wouldOutByteCount.read());
 
   // STRB, KEEP, USER, DEST, ID are not supported and are set to default values
-  io("AXIS_master")("tstrb") <<= uval((1 << (masterConfig.dataBits / 8)) - 1, masterConfig.dataBits / 8);
-  io("AXIS_master")("tkeep") <<= uval(0, masterConfig.dataBits / 8);
-  io("AXIS_master")("tuser") <<= uval(0, masterConfig.userBits);
-  io("AXIS_master")("tdest") <<= uval(0, masterConfig.destBits);
-  io("AXIS_master")("tid") <<= uval(0, masterConfig.idBits);
+  io("AXIS_master")("TSTRB") <<= uval((1 << (masterConfig.dataBits / 8)) - 1, masterConfig.dataBits / 8);
+  io("AXIS_master")("TKEEP") <<= uval(0, masterConfig.dataBits / 8);
+  io("AXIS_master")("TUSER") <<= uval(0, masterConfig.userBits);
+  io("AXIS_master")("TDEST") <<= uval(0, masterConfig.destBits);
+  io("AXIS_master")("TID") <<= uval(0, masterConfig.idBits);
 }
 
 }

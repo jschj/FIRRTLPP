@@ -12,8 +12,8 @@ public:
     firp::Module<MultiRingBuffer>(
       "MultiRingBuffer",
       {
-        firp::Port("enq", true, uintType(inByteWidth * 8)),
-        firp::Port("deq", false, uintType(outByteWidth * 8))
+        firp::Port("enq", true, readyValidType(uintType(inByteWidth * 8))),
+        firp::Port("deq", false, readyValidType(uintType(outByteWidth * 8)))
       },
       inByteWidth, outByteWidth, slotCount
     ),

@@ -297,6 +297,10 @@ FValue zeros(FIRRTLBaseType type) {
       zeroValues.push_back(zeros(el.type));
 
     return bundleCreate(bundleType, zeroValues);
+  } else if (FVectorType vecType = type.dyn_cast<FVectorType>()) {
+    auto z = zeros(vecType.getElementType());
+    SmallVector<FValue> zeroValues(vecType.getNumElements(), z);
+    return vector(zeroValues);
   } else if (IntType intType = type.dyn_cast<IntType>()) {
     int32_t width = intType.getBitWidthOrSentinel();
     assert(width >= 0 && "cannot create zeroes for int type with uninferred width");
@@ -623,6 +627,14 @@ FValue named(FValue what, const std::string& name) {
     what,
     firpContext()->builder().getStringAttr(name)
   ).getResult();
+}
+
+Port Input(const std::string& name, Type type) {
+  return Port(name, true, type);
+}
+
+Port Output(const std::string& name, Type type) {
+  return Port(name, false, type);
 }
 
 void Conditional::build(size_t i, OpBuilder builder) {

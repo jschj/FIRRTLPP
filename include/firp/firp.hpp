@@ -523,6 +523,9 @@ struct Port {
     name(name), isInput(isInput), type(type) {}
 };
 
+Port Input(const std::string& name, Type type);
+Port Output(const std::string& name, Type type);
+
 template <class ConcreteModule>
 class Module {
   std::string baseName;
