@@ -25,7 +25,15 @@ BundleType axi4LiteWriteChannelType(const AXI4LiteConfig& config) {
   });
 }
 
-BundleType axi4LiteResponseChannelType(const AXI4LiteConfig& config) {
+BundleType axi4LiteWriteResponseChannelType(const AXI4LiteConfig& config) {
+  return bundleType({
+    {"VALID", false, bitType()},
+    {"READY", true, bitType()},
+    {"RESP", false, uintType(config.respBits)}
+  });
+}
+
+BundleType axi4LiteReadDataChannelType(const AXI4LiteConfig& config) {
   return bundleType({
     {"VALID", false, bitType()},
     {"READY", true, bitType()},
@@ -38,47 +46,48 @@ BundleType axi4LiteType(const AXI4LiteConfig& config) {
   return bundleType({
     {"AW", false, axi4LiteAddressChannelType(config)},
     {"W", false, axi4LiteWriteChannelType(config)},
-    {"B", true, axi4LiteResponseChannelType(config)},
+    {"B", true, axi4LiteWriteResponseChannelType(config)},
     {"AR", false, axi4LiteAddressChannelType(config)},
-    {"R", true, axi4LiteResponseChannelType(config)}
+    {"R", true, axi4LiteReadDataChannelType(config)}
   });
 }
 
-void AXI4LiteRegisterFile::body() {
+std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, FValue axi4LiteSlave) {
   const uint32_t QUEUE_SIZE = 1;
 
   // write address
   FirpQueue writeAddr(uintType(cfg.addrBits), QUEUE_SIZE);
-  writeAddr.io("enq")("valid") <<= io("AXI4LiteSlave")("AW")("VALID");
-  writeAddr.io("enq")("bits") <<= io("AXI4LiteSlave")("AW")("ADDR");
-  io("AXI4LiteSlave")("AW")("READY") <<= writeAddr.io("deq")("ready");
+  writeAddr.io("enq")("valid") <<= axi4LiteSlave("AW")("VALID");
+  writeAddr.io("enq")("bits") <<= axi4LiteSlave("AW")("ADDR");
+  axi4LiteSlave("AW")("READY") <<= writeAddr.io("deq")("ready");
   // always ready
   writeAddr.io("deq")("ready") <<= uval(1);
 
   // write data
   FirpQueue writeData(uintType(cfg.dataBits), QUEUE_SIZE);
-  writeData.io("enq")("valid") <<= io("AXI4LiteSlave")("W")("VALID");
-  writeData.io("enq")("bits") <<= io("AXI4LiteSlave")("W")("DATA");
-  io("AXI4LiteSlave")("W")("READY") <<= writeData.io("deq")("ready");
+  writeData.io("enq")("valid") <<= axi4LiteSlave("W")("VALID");
+  writeData.io("enq")("bits") <<= axi4LiteSlave("W")("DATA");
+  axi4LiteSlave("W")("READY") <<= writeData.io("deq")("ready");
   writeData.io("deq")("ready") <<= uval(1);
 
   // write response
   FirpQueue writeResp(uintType(cfg.respBits), QUEUE_SIZE);
-  io("AXI4LiteSlave")("B")("VALID") <<= writeResp.io("deq")("valid");
-  io("AXI4LiteSlave")("B")("RESP") <<= writeResp.io("deq")("bits");
-  writeResp.io("deq")("ready") <<= io("AXI4LiteSlave")("B")("READY");
+  axi4LiteSlave("B")("VALID") <<= writeResp.io("deq")("valid");
+  axi4LiteSlave("B")("RESP") <<= writeResp.io("deq")("bits");
+  writeResp.io("deq")("ready") <<= axi4LiteSlave("B")("READY");
 
   // read address
   FirpQueue readAddr(uintType(cfg.addrBits), QUEUE_SIZE);
-  readAddr.io("enq")("valid") <<= io("AXI4LiteSlave")("AR")("VALID");
-  readAddr.io("enq")("bits") <<= io("AXI4LiteSlave")("AR")("ADDR");
-  io("AXI4LiteSlave")("AR")("READY") <<= readAddr.io("deq")("ready");
+  readAddr.io("enq")("valid") <<= axi4LiteSlave("AR")("VALID");
+  readAddr.io("enq")("bits") <<= axi4LiteSlave("AR")("ADDR");
+  axi4LiteSlave("AR")("READY") <<= readAddr.io("deq")("ready");
 
   // read response
   FirpQueue readResp(uintType(cfg.dataBits), QUEUE_SIZE);
-  io("AXI4LiteSlave")("R")("VALID") <<= readResp.io("deq")("valid");
-  io("AXI4LiteSlave")("R")("DATA") <<= readResp.io("deq")("bits");
-  readResp.io("deq")("ready") <<= io("AXI4LiteSlave")("R")("READY");
+  axi4LiteSlave("R")("VALID") <<= readResp.io("deq")("valid");
+  axi4LiteSlave("R")("DATA") <<= readResp.io("deq")("bits");
+  axi4LiteSlave("R")("RESP") <<= uval(0, cfg.respBits);
+  readResp.io("deq")("ready") <<= axi4LiteSlave("R")("READY");
 
   BundleType writeCommand = bundleType({
     {"addr", false, uintType(cfg.addrBits)},
@@ -116,7 +125,7 @@ void AXI4LiteRegisterFile::body() {
   // reading
   auto readIndex = readAddr.io("deq")("bits") / uval((cfg.dataBits / 8));
   auto readValid = readAddr.io("deq")("valid");
-  regVector = vector(regs);
+  auto regVector = vector(regs);
   readResp.io("enq")("bits") <<= mux(readValid, regVector[readIndex], uval(0, cfg.dataBits));
   readResp.io("enq")("valid") <<= readAddr.io("deq")("valid");
   readAddr.io("deq")("ready") <<= readResp.io("enq")("ready");
@@ -128,16 +137,11 @@ void AXI4LiteRegisterFile::body() {
 
   // can only process read addresses when there is space for a response
   readAddr.io("deq")("ready") <<= readResp.io("enq")("ready");
-}
 
-FValue AXI4LiteRegisterFile::io(const std::string& name) {
-  uint32_t index = 0;
-
-  for (const auto& regName : registers)
-    if (regName == name)
-      return regVector[index++];
-
-  return Module<AXI4LiteRegisterFile>::io(name);
+  std::vector<FValue> regAccessors;
+  for (auto reg : regs)
+    regAccessors.push_back(reg.read());
+  return regAccessors;
 }
 
 }

@@ -35,23 +35,23 @@ BundleType axi4WriteChannelType(const AXI4Config& config) {
 
 BundleType axi4ResponseChannelType(const AXI4Config& config) {
   return bundleType({
-    {"READY", true, bitType()},
-    {"VALID", false, bitType()},
-    {"ID", false, uintType(config.idBits)},
-    {"RESP", false, uintType(config.respBits)},
-    {"USER", false, uintType(config.userBits)}
+    {"READY", false, bitType()},
+    {"VALID", true, bitType()},
+    {"ID", true, uintType(config.idBits)},
+    {"RESP", true, uintType(config.respBits)},
+    {"USER", true, uintType(config.userBits)}
   });
 }
 
 BundleType axi4ReadChannelType(const AXI4Config& config) {
   return bundleType({
-    {"READY", true, bitType()},
-    {"VALID", false, bitType()},
-    {"ID", false, uintType(config.idBits)},
-    {"DATA", false, uintType(config.dataBits)},
-    {"RESP", false, uintType(config.respBits)},
-    {"USER", false, uintType(config.userBits)},
-    {"LAST", false, bitType()}
+    {"READY", false, bitType()},
+    {"VALID", true, bitType()},
+    {"ID", true, uintType(config.idBits)},
+    {"DATA", true, uintType(config.dataBits)},
+    {"RESP", true, uintType(config.respBits)},
+    {"USER", true, uintType(config.userBits)},
+    {"LAST", true, bitType()}
   });
 }
 

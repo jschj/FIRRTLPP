@@ -11,7 +11,7 @@ struct AXI4Config {
   uint32_t addrBits = 32;
   uint32_t dataBits = 32;
   uint32_t idBits = 1;
-  uint32_t userBits = 0;
+  uint32_t userBits = 1;
   // these are all fixed by the AXI4 standard
   uint32_t lenBits   = 8;
   uint32_t sizeBits  = 3;
@@ -28,6 +28,7 @@ BundleType axi4AddressChannelType(const AXI4Config& config);
 BundleType axi4WriteChannelType(const AXI4Config& config);
 BundleType axi4ResponseChannelType(const AXI4Config& config);
 BundleType axi4ReadChannelType(const AXI4Config& config);
+// If input is set to true, this is considered a slave port. Otherwise, it is a master port.
 BundleType axi4Type(const AXI4Config& writeConfig, const AXI4Config& readConfig);
 
 }

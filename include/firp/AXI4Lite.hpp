@@ -15,29 +15,11 @@ struct AXI4LiteConfig {
 
 firp::BundleType axi4LiteAddressChannelType(const AXI4LiteConfig& config);
 firp::BundleType axi4LiteDataChannelType(const AXI4LiteConfig& config);
-firp::BundleType axi4LiteResponseChannelType(const AXI4LiteConfig& config);
+firp::BundleType axi4LiteWriteResponseChannelType(const AXI4LiteConfig& config);
 
 firp::BundleType axi4LiteType(const AXI4LiteConfig& config);
 
-class AXI4LiteRegisterFile : public firp::Module<AXI4LiteRegisterFile> {
-  AXI4LiteConfig cfg;
-  std::vector<std::string> registers;
-  firp::FValue regVector;
-public:
-  AXI4LiteRegisterFile(const AXI4LiteConfig& cfg, std::initializer_list<std::string> registers):
-    firp::Module<AXI4LiteRegisterFile>(
-      "AXI4LiteRegisterFile",
-      {
-        firp::Port("AXI4LiteSlave", true, axi4LiteType(cfg))
-      },
-      cfg
-    ),
-    cfg(cfg), registers(registers) { build(); }
-
-  void body();
-
-  firp::FValue io(const std::string& name);
-};
+std::vector<firp::FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, firp::FValue axi4LiteSlave);
 
 }
 

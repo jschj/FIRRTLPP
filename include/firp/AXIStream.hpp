@@ -9,9 +9,9 @@ namespace firp::axis {
 
 struct AXIStreamConfig {
   uint32_t dataBits;
-  uint32_t userBits = 0;
-  uint32_t destBits = 0;
-  uint32_t idBits = 0;
+  uint32_t userBits = 1;
+  uint32_t destBits = 1;
+  uint32_t idBits = 1;
 
   uint32_t dataBytes() const { return dataBits / 8; }
 };
