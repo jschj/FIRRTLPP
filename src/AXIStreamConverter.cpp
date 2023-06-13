@@ -49,7 +49,7 @@ void MultiRingBuffer::body() {
   when(doesFire(io("deq")), [&](){
     std::vector<FValue> elementValues;  
 
-    for (uint32_t i = 0; i < outByteWidth; ++i)
+    for (int32_t i = outByteWidth - 1; i >= 0; --i)
       elementValues.push_back(buf.read()[nextPtr(outPtr, uval(i + 1))]);
 
     io("deq")("bits") <<= cat(elementValues);

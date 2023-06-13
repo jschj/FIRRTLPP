@@ -119,6 +119,8 @@ std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::v
       reg.read()
     );
 
+    llvm::outs() << "register " << name << " is at offset " << offset << "\n";
+
     offset += cfg.dataBits / 8;
   }
 
