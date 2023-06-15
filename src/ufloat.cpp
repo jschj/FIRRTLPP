@@ -348,6 +348,35 @@ void generateDSPMult() {
 
 }
 
+class TwoFPMults : public Module<TwoFPMults> {
+  ufloat::UFloatConfig cfg;
+public:
+  TwoFPMults(const ufloat::UFloatConfig& cfg):
+    Module<TwoFPMults>(
+      "TwoFPMults",
+      {
+        Input("a1", uintType(cfg.getWidth())),
+        Input("a2", uintType(cfg.getWidth())),
+        Input("b1", uintType(cfg.getWidth())),
+        Input("b2", uintType(cfg.getWidth())),
+        Output("c1", uintType(cfg.getWidth())),
+        Output("c2", uintType(cfg.getWidth()))
+      },
+      cfg
+    ), cfg(cfg) { build(); }
+
+  void body() {
+    ufloat::FPMult mult1(cfg);
+    ufloat::FPMult mult2(cfg);
+    mult1.io("a") <<= io("a1");
+    mult1.io("b") <<= io("b1");
+    mult2.io("a") <<= io("a2");
+    mult2.io("b") <<= io("b2");
+    io("c1") <<= mult1.io("c");
+    io("c2") <<= mult2.io("c");
+  }
+};
+
 void generateFPMult() {
   std::unique_ptr<mlir::MLIRContext> context = std::make_unique<mlir::MLIRContext>();
   assert(context->getOrLoadDialect<circt::hw::HWDialect>());
@@ -355,15 +384,18 @@ void generateFPMult() {
   assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
   assert(context->getOrLoadDialect<circt::sv::SVDialect>());
 
-  createFirpContext(context.get(), "FPMult");
+  createFirpContext(context.get(), "TwoFPMults");
 
   {
-    ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
+    //ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
+    //mult.makeTop();
+
+    TwoFPMults mult(ufloat::UFloatConfig{8, 23});
     mult.makeTop();
   }
 
   firpContext()->finish();
-  //firpContext()->dump();
+  firpContext()->dump();
 
   llvm::outs() << "mult delay: " << ufloat::scheduling::ufloatFPMultDelay(ufloat::UFloatConfig{8, 23}) << "\n";
 

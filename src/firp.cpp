@@ -20,6 +20,10 @@ llvm::hash_code compute_hash(const circt::firrtl::FIRRTLBaseType& t) {
 namespace firp {
 
 void ModuleBuilder::build(uint32_t sigId) {
+  // check if module was already constructed
+  if (constructed.contains(sigId))
+    return;
+
   auto constructable = constructables[sigId];
   FModuleOp modOp = constructable.modOp;
 

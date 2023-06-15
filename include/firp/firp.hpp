@@ -600,8 +600,9 @@ public:
   }
 
   void build() {
-    //if (wasBuilt)
-    //  return;
+    // BUG: ???
+
+    // check that build() was not already called for this module
     assert(!wasBuilt && "Module was already built. Make sure that build() is only called once.");
     firpContext()->moduleBuilder->build(signatureId);
     wasBuilt = true;
