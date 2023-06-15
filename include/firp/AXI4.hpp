@@ -30,6 +30,9 @@ BundleType axi4ResponseChannelType(const AXI4Config& config);
 BundleType axi4ReadChannelType(const AXI4Config& config);
 // If input is set to true, this is considered a slave port. Otherwise, it is a master port.
 BundleType axi4Type(const AXI4Config& writeConfig, const AXI4Config& readConfig);
+// Collects all the signals of the sub channels into one big bundle and names them such that they
+// are understood by Vivado.
+BundleType axi4FlattenType(BundleType type);
 
 }
 

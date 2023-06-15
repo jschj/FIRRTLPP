@@ -65,4 +65,22 @@ BundleType axi4Type(const AXI4Config& writeConfig, const AXI4Config& readConfig)
   });
 }
 
+BundleType axi4FlattenType(BundleType type) {
+  std::vector<BundleType::BundleElement> newElements;
+
+  for (const auto& el : type.getElements()) {
+    for (const auto& subEl : el.type.cast<BundleType>().getElements()) {
+      bool flip = el.isFlip != subEl.isFlip;
+
+      newElements.emplace_back(
+        StringAttr::get(type.getContext(), el.name.str() + subEl.name.str()),
+        flip,
+        subEl.type
+      );
+    }
+  }
+
+  return BundleType::get(type.getContext(), newElements);
+}
+
 }

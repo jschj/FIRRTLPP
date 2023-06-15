@@ -52,42 +52,60 @@ BundleType axi4LiteType(const AXI4LiteConfig& config) {
   });
 }
 
+BundleType axi4LiteFlattenType(BundleType type) {
+  std::vector<BundleType::BundleElement> newElements;
+
+  for (const auto& el : type.getElements()) {
+    for (const auto& subEl : el.type.cast<BundleType>().getElements()) {
+      bool flip = el.isFlip != subEl.isFlip;
+
+      newElements.emplace_back(
+        StringAttr::get(type.getContext(), el.name.str() + subEl.name.str()),
+        flip,
+        subEl.type
+      );
+    }
+  }
+
+  return BundleType::get(type.getContext(), newElements);
+}
+
 std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, FValue axi4LiteSlave) {
   const uint32_t QUEUE_SIZE = 1;
 
   // write address
   FirpQueue writeAddr(uintType(cfg.addrBits), QUEUE_SIZE);
-  writeAddr.io("enq")("valid") <<= axi4LiteSlave("AW")("VALID");
-  writeAddr.io("enq")("bits") <<= axi4LiteSlave("AW")("ADDR");
-  axi4LiteSlave("AW")("READY") <<= writeAddr.io("deq")("ready");
+  writeAddr.io("enq")("valid") <<= axi4LiteSlave("AWVALID");
+  writeAddr.io("enq")("bits") <<= axi4LiteSlave("AWADDR");
+  axi4LiteSlave("AWREADY") <<= writeAddr.io("deq")("ready");
   // always ready
   writeAddr.io("deq")("ready") <<= uval(1);
 
   // write data
   FirpQueue writeData(uintType(cfg.dataBits), QUEUE_SIZE);
-  writeData.io("enq")("valid") <<= axi4LiteSlave("W")("VALID");
-  writeData.io("enq")("bits") <<= axi4LiteSlave("W")("DATA");
-  axi4LiteSlave("W")("READY") <<= writeData.io("deq")("ready");
+  writeData.io("enq")("valid") <<= axi4LiteSlave("WVALID");
+  writeData.io("enq")("bits") <<= axi4LiteSlave("WDATA");
+  axi4LiteSlave("WREADY") <<= writeData.io("deq")("ready");
   writeData.io("deq")("ready") <<= uval(1);
 
   // write response
   FirpQueue writeResp(uintType(cfg.respBits), QUEUE_SIZE);
-  axi4LiteSlave("B")("VALID") <<= writeResp.io("deq")("valid");
-  axi4LiteSlave("B")("RESP") <<= writeResp.io("deq")("bits");
-  writeResp.io("deq")("ready") <<= axi4LiteSlave("B")("READY");
+  axi4LiteSlave("BVALID") <<= writeResp.io("deq")("valid");
+  axi4LiteSlave("BRESP") <<= writeResp.io("deq")("bits");
+  writeResp.io("deq")("ready") <<= axi4LiteSlave("BREADY");
 
   // read address
   FirpQueue readAddr(uintType(cfg.addrBits), QUEUE_SIZE);
-  readAddr.io("enq")("valid") <<= axi4LiteSlave("AR")("VALID");
-  readAddr.io("enq")("bits") <<= axi4LiteSlave("AR")("ADDR");
-  axi4LiteSlave("AR")("READY") <<= readAddr.io("deq")("ready");
+  readAddr.io("enq")("valid") <<= axi4LiteSlave("ARVALID");
+  readAddr.io("enq")("bits") <<= axi4LiteSlave("ARADDR");
+  axi4LiteSlave("ARREADY") <<= readAddr.io("deq")("ready");
 
   // read response
   FirpQueue readResp(uintType(cfg.dataBits), QUEUE_SIZE);
-  axi4LiteSlave("R")("VALID") <<= readResp.io("deq")("valid");
-  axi4LiteSlave("R")("DATA") <<= readResp.io("deq")("bits");
-  axi4LiteSlave("R")("RESP") <<= uval(0, cfg.respBits);
-  readResp.io("deq")("ready") <<= axi4LiteSlave("R")("READY");
+  axi4LiteSlave("RVALID") <<= readResp.io("deq")("valid");
+  axi4LiteSlave("RDATA") <<= readResp.io("deq")("bits");
+  axi4LiteSlave("RRESP") <<= uval(0, cfg.respBits);
+  readResp.io("deq")("ready") <<= axi4LiteSlave("RREADY");
 
   BundleType writeCommand = bundleType({
     {"addr", false, uintType(cfg.addrBits)},
