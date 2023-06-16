@@ -4,9 +4,6 @@
 namespace firp::axis {
 
 void MultiRingBuffer::body() {
-  uint32_t inWidth = inByteWidth * 8;
-  uint32_t outWidth = outByteWidth * 8;
-
   uint32_t ptrWidth = clog2(slotCount);
 
   auto buf = Reg(vectorType(uintType(8), slotCount), "buf");
@@ -28,8 +25,8 @@ void MultiRingBuffer::body() {
     // [0][1][2][3][4][5][6][7]
     return mux(
       wouldWrap,
-      ptr1 > ptr2 & nextPtr(ptr1, inc) < ptr2,
-      ptr1 > ptr2 | ptr1 + inc < ptr2
+      (ptr1 > ptr2) & (nextPtr(ptr1, inc) < ptr2),
+      (ptr1 > ptr2) | (ptr1 + inc < ptr2)
     );
   };
 
@@ -64,7 +61,7 @@ void MultiRingBuffer::body() {
 void AXIStreamConverter::body() {
   uint32_t inByteWidth = slaveConfig.dataBits / 8;
   uint32_t outByteWidth = masterConfig.dataBits / 8;
-  uint32_t slotCount = 1 << clog2(slaveConfig.dataBits + masterConfig.dataBits); 
+  uint32_t slotCount = 1 << clog2(std::max(inByteWidth, outByteWidth) * 2);
 
   auto buf = MultiRingBuffer(inByteWidth, outByteWidth, slotCount);
 

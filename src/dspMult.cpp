@@ -40,6 +40,8 @@ FValue DSPMult::Add(FValue x, FValue y) {
 std::tuple<firp::FValue, uint32_t> DSPMult::treeReduce(const std::vector<FValue>& values, uint32_t from, uint32_t to) {
   // TODO: What about the bit widths of the values?
 
+  llvm::outs() << "    processing " << "[" << from << ", " << to << ")\n";
+
   if (to - from == 1)
     return std::make_tuple(shiftRegister(values[from], adderDelay), adderDelay);
 
@@ -56,6 +58,8 @@ std::tuple<firp::FValue, uint32_t> DSPMult::treeReduce(const std::vector<FValue>
 
 void DSPMult::body() {
   auto tiles = getDSPTiles(width);
+  assert(tiles.size() <= 4);
+  llvm::outs() << "DSPMult::body()\n";
 
   std::vector<FValue> parts;
 
@@ -64,9 +68,12 @@ void DSPMult::body() {
     auto y = io("b")(tile.yHi, tile.yLo);
     auto zeros = cons(0, uintType(tile.getShift()));
     parts.push_back(cat({DSPMult24x17(x, y), zeros}));
+    llvm::outs() << "    DSPMult24x17\n";
   }
 
+  llvm::outs() << "    treeReduce\n";
   auto [result, delay] = treeReduce(parts, 0, parts.size());
+  llvm::outs() << "    treeReduce done\n";
   moduleDelay = delay;
 
   io("c") <<= result;
