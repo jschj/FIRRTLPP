@@ -70,8 +70,10 @@ BundleType axi4LiteFlattenType(BundleType type) {
   return BundleType::get(type.getContext(), newElements);
 }
 
-std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, FValue axi4LiteSlave) {
+std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, uint32_t regOffset, FValue axi4LiteSlave) {
   const uint32_t QUEUE_SIZE = 1;
+
+  assert(regOffset >= cfg.dataBits / 8 && "register offset must be at least the size of one register");
 
   // write address
   FirpQueue writeAddr(uintType(cfg.addrBits), QUEUE_SIZE);
@@ -139,7 +141,7 @@ std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::v
 
     llvm::outs() << "register " << name << " is at offset " << offset << "\n";
 
-    offset += cfg.dataBits / 8;
+    offset += regOffset;
   }
 
   // reading

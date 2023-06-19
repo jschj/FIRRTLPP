@@ -21,7 +21,7 @@ firp::BundleType axi4LiteType(const AXI4LiteConfig& config);
 
 firp::BundleType axi4LiteFlattenType(firp::BundleType type);
 
-std::vector<firp::FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, firp::FValue axi4LiteSlave);
+std::vector<firp::FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, uint32_t regOffset, firp::FValue axi4LiteSlave);
 
 }
 
