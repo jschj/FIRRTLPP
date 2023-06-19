@@ -129,7 +129,8 @@ std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::v
     regs.push_back(reg);
 
     // writing
-    auto writeAddrMatch = writeCommandQueue.io("deq")("bits")("addr") == uval(offset);
+    // extract the lowest 8 bits
+    auto writeAddrMatch = (writeCommandQueue.io("deq")("bits")("addr") & uval(0xff)) == uval(offset);
     auto writeValid = writeCommandQueue.io("deq")("valid");
     auto doWrite = wireInit(writeAddrMatch & writeValid, "doWrite_" + name);
 
@@ -145,7 +146,7 @@ std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::v
   }
 
   // reading
-  auto readIndex = readAddr.io("deq")("bits") / uval((cfg.dataBits / 8));
+  auto readIndex = (readAddr.io("deq")("bits") & uval(0xff)) / uval(regOffset);
   auto readValid = readAddr.io("deq")("valid");
   auto regVector = vector(regs);
   readResp.io("enq")("bits") <<= mux(readValid, regVector[readIndex], uval(0, cfg.dataBits));
