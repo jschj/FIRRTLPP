@@ -70,7 +70,8 @@ void AXIStreamSender::body() {
   io("AXIS")("TDATA") <<= queue.io("deq")("bits")("bits");
   queue.io("deq")("ready") <<= io("AXIS")("TREADY");
 
-  auto ones = cons((1 << config.dataBytes()) - 1, uintType(config.dataBytes()));
+  auto ones = ~uval(0, config.dataBytes());
+
   io("AXIS")("TSTRB") <<= ones;
   io("AXIS")("TKEEP") <<= ones;
   io("AXIS")("TUSER") <<= cons(0, uintType(config.userBits));

@@ -71,7 +71,9 @@ BundleType axi4LiteFlattenType(BundleType type) {
 }
 
 std::vector<FValue> axi4LiteRegisterFile(const AXI4LiteConfig& cfg, const std::vector<std::string>& registers, uint32_t regOffset, FValue axi4LiteSlave) {
-  const uint32_t QUEUE_SIZE = 1;
+  // TODO: There is some kind of bug where read responses vanish for a sequence of read requests. Increasing the queue
+  // sizes is a quick fix.
+  const uint32_t QUEUE_SIZE = 16;
 
   assert(regOffset >= cfg.dataBits / 8 && "register offset must be at least the size of one register");
 

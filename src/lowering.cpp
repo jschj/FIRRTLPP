@@ -12,13 +12,14 @@
 
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/Timing.h"
+#include "mlir/Transforms/Passes.h"
 
 #include "llvm/Support/SourceMgr.h"
 
 
 namespace firp {
 
-mlir::LogicalResult lowerFirrtlToHw() {
+mlir::LogicalResult lowerFirrtlToHw(bool canonicalize) {
   mlir::ModuleOp root = firpContext()->root;
   mlir::MLIRContext *ctxt = root.getContext();
   mlir::PassManager pm(ctxt);
@@ -56,6 +57,9 @@ mlir::LogicalResult lowerFirrtlToHw() {
     //!isRandomEnabled(RandomKind::Mem), !isRandomEnabled(RandomKind::Reg),
     //addVivadoRAMAddressConflictSynthesisBugWorkaround
   ));
+
+  if (canonicalize)
+    pm.addPass(mlir::createCanonicalizerPass());
 
   return pm.run(root);
 }
