@@ -22,6 +22,7 @@ public:
   void body();
 
   static uint32_t getDelay(uint32_t bitWidth, uint32_t maxAdderWidth) {
+    llvm::outs() << "PipelinedAdder::getDelay: " << bitWidth << " " << maxAdderWidth << "\n";
     return bitWidth / maxAdderWidth + (bitWidth % maxAdderWidth ? 1 : 0);
   }
 

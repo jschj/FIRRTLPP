@@ -1,6 +1,6 @@
 #include <firp/ufloat.hpp>
 
-
+#include <firp/timings.hpp>
 
 
 namespace ufloat {
@@ -237,6 +237,7 @@ FValue handleZero(FValue m, FValue e, FValue underflow, FValue zero) {
 }
 
 void FPMult::body() {
+  // + 1
   auto op1 = regNext(ufloatUnpack(io("a"), cfg));
   auto op2 = regNext(ufloatUnpack(io("b"), cfg));
 
@@ -245,31 +246,55 @@ void FPMult::body() {
   multMantissas.io("a") <<= cat({uval(1), op1("m")});
   multMantissas.io("b") <<= cat({uval(1), op2("m")});
 
+  llvm::outs() << "dspDelay: " << multMantissas.getDelay() << "\n";
+  //assert(false);
+
+  // + 1
   auto zeroCheck = isEitherZero(op1, op2);
-  auto addExponentsWithOffset = addExponents(op1("e"), op2("e"));
+  // + 1 + 1
+  auto addExponentsWithOffset = wireInit(addExponents(op1("e"), op2("e")), "addExponentsWithOffset");
 
   // stage 2
   uint32_t dspDelay = multMantissas.getDelay();
+  
+  // + 1 + dspDelay
+  auto xx = wireInit(shiftRegister(addExponentsWithOffset, dspDelay - 1), "xx");
+  // 1 + dspDelay
+  auto yy = wireInit(multMantissas.io("c").head(1), "yy");
+  
+  // + 1 + dspDelay
   auto [eOut, underflowOut] = incrementExponentAndSubtractOffset(
-    shiftRegister(addExponentsWithOffset, dspDelay - 1),
-    multMantissas.io("c").head(1)
+    xx,
+    yy
   );
 
+  eOut = wireInit(eOut, "eOut");
+  underflowOut = wireInit(underflowOut, "underflowOut");
+
+  // + 1 + dspDelay
+  auto mOut = wireInit(selectMantissa(multMantissas.io("c"), cfg.mantissaWidth), "mOut");
+
+  // + 1 + dspDelay + 1
   auto result = handleZero(
-    selectMantissa(multMantissas.io("c"), cfg.mantissaWidth),
+    mOut,
     eOut,
     underflowOut,
-    shiftRegister(zeroCheck, dspDelay - 1)
+    // + 1 + dspDelay
+    shiftRegister(zeroCheck, dspDelay)
   );
+
+  uint32_t analysisDelay = TimingAnalysis::getEndTimeOf(result);
+  llvm::outs() << "analysisDelay: " << analysisDelay << "\n";
 
   io("c") <<= result;
 }
 
 void FPConvert::body() {
+  // TODO: some bug here
   auto uBias = uval((1 << (cfg.exponentWidth - 1)) - 1);
   auto fBias = uval((1 << (is32Bit ? 7 : 10)) - 1);
 
-  assert((1 << (cfg.exponentWidth - 1)) - 1 == (1 << (is32Bit ? 7 : 10)) - 1);
+  //assert((1 << (cfg.exponentWidth - 1)) - 1 == (1 << (is32Bit ? 7 : 10)) - 1);
 
   auto exp = wireInit(io("in") >> cfg.mantissaWidth, "exp");
   auto man = wireInit((io("in") & uval((1 << cfg.mantissaWidth) - 1))(cfg.getWidth() - cfg.exponentWidth - 1, 0), "man").read();
@@ -292,6 +317,9 @@ void FPConvert::body() {
       newMan = regNext(man << (52 - cfg.mantissaWidth), "newMan");
   }
 
+  assert(newMan.bitCount() == (is32Bit ? 23 : 52));
+  assert(expCut.read().bitCount() == (is32Bit ? 8 : 11));
+
   newMan = regNext(newMan);
 
   io("out") <<= cat({expCut.read(), newMan});
@@ -306,8 +334,15 @@ uint32_t ufloatFPAddDelay(const UFloatConfig& cfg) {
 }
 
 uint32_t ufloatFPMultDelay(const UFloatConfig& cfg) {
-  auto tiles = getDSPTiles(cfg.mantissaWidth + 1);
-  uint32_t dspDelay = clog2(tiles.size() + 1);
+  uint32_t adderDelay = PipelinedAdder::getDelay((cfg.mantissaWidth + 1) * 2, 32);
+  uint32_t leafCount = getDSPTiles(cfg.mantissaWidth + 1).size();
+  uint32_t treeHeight = clog2(leafCount - 1);
+  uint32_t dspDelay = treeHeight * adderDelay + 1;
+  llvm::outs() << "ufloatFPMultDelay()\n";
+  llvm::outs() << "  adderDelay: " << adderDelay << "\n";
+  llvm::outs() << "  leafCount: " << leafCount << "\n";
+  llvm::outs() << "  treeHeight: " << treeHeight << "\n";
+  llvm::outs() << "  dspDelay: " << dspDelay << "\n";
   return dspDelay + 1 + 1;
 }
 

@@ -29,7 +29,7 @@ void PipelinedAdder::body() {
     auto inB = wireInit(shiftRegister(io("b")(hi, lo), preDelay), std::string("inB_") + std::to_string(i));
 
     // top bit is ignored as it will never be set to 1
-    auto sum = inA.read() + inB + shiftRegister(carry, 1);
+    auto sum = regNext(inA.read() + inB + carry).read();
     uint32_t sumWidth = sum.bitCount();
     llvm::outs() << " sum/inA/inB width: " << sum.bitCount() << " " << inA.read().bitCount() << " " << inB.read().bitCount() << "\n";
 

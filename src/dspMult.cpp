@@ -40,20 +40,26 @@ FValue DSPMult::Add(FValue x, FValue y) {
 std::tuple<firp::FValue, uint32_t> DSPMult::treeReduce(const std::vector<FValue>& values, uint32_t from, uint32_t to) {
   // TODO: What about the bit widths of the values?
 
-  llvm::outs() << "    processing " << "[" << from << ", " << to << ")\n";
+  llvm::outs() << "    processing " << "[" << from << ", " << to << ") adderDelay is " << adderDelay << "\n";
 
   if (to - from == 1)
-    return std::make_tuple(shiftRegister(values[from], adderDelay), adderDelay);
+    return std::make_tuple(values[from], 0);
 
   if (to - from == 2)
     return std::make_tuple(Add(values[from], values[from + 1]), adderDelay);
 
   uint32_t mid = (from + to) / 2;
 
-  auto [left, leftDelay] = treeReduce(values, from, mid);
-  auto [right, rightDelay] = treeReduce(values, mid, to);
+  auto [left, leftEndTime] = treeReduce(values, from, mid);
+  auto [right, rightEndTime] = treeReduce(values, mid, to);
 
-  return std::make_tuple(Add(left, right), std::max(leftDelay, rightDelay) + adderDelay);
+  uint32_t leftDelay = leftEndTime > rightEndTime ? 0 : rightEndTime - leftEndTime;
+  uint32_t rightDelay = leftEndTime > rightEndTime ? leftEndTime - rightEndTime : 0;
+
+  left = shiftRegister(left, leftDelay);
+  right = shiftRegister(right, rightDelay);
+
+  return std::make_tuple(Add(left, right), std::max(leftEndTime, rightEndTime) + adderDelay);
 }
 
 void DSPMult::body() {
@@ -67,14 +73,15 @@ void DSPMult::body() {
     auto x = io("a")(tile.xHi, tile.xLo);
     auto y = io("b")(tile.yHi, tile.yLo);
     auto zeros = cons(0, uintType(tile.getShift()));
+    // + 1
     parts.push_back(cat({DSPMult24x17(x, y), zeros}));
     llvm::outs() << "    DSPMult24x17\n";
   }
 
   llvm::outs() << "    treeReduce\n";
   auto [result, delay] = treeReduce(parts, 0, parts.size());
-  llvm::outs() << "    treeReduce done\n";
-  moduleDelay = delay;
+  llvm::outs() << "    treeReduce done with delay " << delay << "\n";
+  moduleDelay = delay + 1;
 
   io("c") <<= result;
 }

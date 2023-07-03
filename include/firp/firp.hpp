@@ -686,6 +686,17 @@ public:
   FModuleOp getModuleOp() const {
     return modOp;
   }
+
+  uint32_t getPortIndex(const std::string& name) const {
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    return it->second;
+  }
 };
 
 template <class ConcreteModule>
