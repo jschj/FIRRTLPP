@@ -1,4 +1,4 @@
-#include "AXI4.hpp"
+#include <firp/AXI4.hpp>
 
 
 namespace axi4 {
@@ -35,23 +35,23 @@ BundleType axi4WriteChannelType(const AXI4Config& config) {
 
 BundleType axi4ResponseChannelType(const AXI4Config& config) {
   return bundleType({
-    {"READY", true, bitType()},
-    {"VALID", false, bitType()},
-    {"ID", false, uintType(config.idBits)},
-    {"RESP", false, uintType(config.respBits)},
-    {"USER", false, uintType(config.userBits)}
+    {"READY", false, bitType()},
+    {"VALID", true, bitType()},
+    {"ID", true, uintType(config.idBits)},
+    {"RESP", true, uintType(config.respBits)},
+    {"USER", true, uintType(config.userBits)}
   });
 }
 
 BundleType axi4ReadChannelType(const AXI4Config& config) {
   return bundleType({
-    {"READY", true, bitType()},
-    {"VALID", false, bitType()},
-    {"ID", false, uintType(config.idBits)},
-    {"DATA", false, uintType(config.dataBits)},
-    {"RESP", false, uintType(config.respBits)},
-    {"USER", false, uintType(config.userBits)},
-    {"LAST", false, bitType()}
+    {"READY", false, bitType()},
+    {"VALID", true, bitType()},
+    {"ID", true, uintType(config.idBits)},
+    {"DATA", true, uintType(config.dataBits)},
+    {"RESP", true, uintType(config.respBits)},
+    {"USER", true, uintType(config.userBits)},
+    {"LAST", true, bitType()}
   });
 }
 
@@ -63,6 +63,24 @@ BundleType axi4Type(const AXI4Config& writeConfig, const AXI4Config& readConfig)
     {"AR", true, axi4AddressChannelType(readConfig)},
     {"R", false, axi4ReadChannelType(readConfig)}
   });
+}
+
+BundleType axi4FlattenType(BundleType type) {
+  std::vector<BundleType::BundleElement> newElements;
+
+  for (const auto& el : type.getElements()) {
+    for (const auto& subEl : el.type.cast<BundleType>().getElements()) {
+      bool flip = el.isFlip != subEl.isFlip;
+
+      newElements.emplace_back(
+        StringAttr::get(type.getContext(), el.name.str() + subEl.name.str()),
+        flip,
+        subEl.type
+      );
+    }
+  }
+
+  return BundleType::get(type.getContext(), newElements);
 }
 
 }

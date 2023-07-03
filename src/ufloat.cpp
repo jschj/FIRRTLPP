@@ -1,6 +1,6 @@
-#include "ufloat.hpp"
+#include <firp/ufloat.hpp>
 
-
+#include <firp/timings.hpp>
 
 
 namespace ufloat {
@@ -28,6 +28,54 @@ FValue ufloatUnpack(FValue what, const UFloatConfig& cfg) {
 FValue ufloatPack(FValue what, const UFloatConfig& cfg) {
   assert(what.bitCount() == cfg.getWidth());
   return cat({what("e"), what("m")});
+}
+
+uint64_t doubleToUFloatBits(double val, const UFloatConfig& cfg) {
+  assert(cfg.getWidth() <= 64 && "Cannot convert to ufloat with width > 64");
+  assert(val >= 0.0 && "Cannot convert negative double to ufloat");
+
+  uint64_t raw = *reinterpret_cast<const uint64_t*>(&val);
+
+  // special case for 0
+  if (raw == 0)
+    return 0;
+
+  uint64_t exp = (raw >> 52) & 0x7ff;
+  uint64_t man = raw & 0xfffffffffffff;
+
+  // special case for nan
+  if (exp == 0x7ff && man != 0)
+    return (1ul << (cfg.getWidth() - 1)) - 1;
+
+  uint64_t ufloatBias = (1 << (cfg.exponentWidth - 1)) - 1;
+
+  uint64_t e = exp - 1023 + ufloatBias;
+  uint64_t m = (52 >= cfg.mantissaWidth) ? man >> (52 - cfg.mantissaWidth) : man << (cfg.mantissaWidth - 52);
+
+  // clip the exponent
+  e = std::min(e, (1ul << cfg.exponentWidth) - 1);
+
+  return (e << cfg.mantissaWidth) | m;
+}
+
+double ufloatBitsToDouble(uint64_t val, const UFloatConfig& cfg) {
+  assert(cfg.getWidth() <= 64 && "Cannot convert to ufloat with width > 64");
+
+  if (val == 0)
+    return 0.0;
+  
+  uint64_t exp = val >> cfg.mantissaWidth;
+  uint64_t man = val & ((1ul << cfg.mantissaWidth) - 1);
+
+  uint64_t ufloatBias = (1 << (cfg.exponentWidth - 1)) - 1;
+
+  uint64_t e = exp - ufloatBias + 1023;
+  uint64_t m = (52 >= cfg.mantissaWidth) ? man << (52 - cfg.mantissaWidth) : man >> (cfg.mantissaWidth - 52);
+
+  double result;
+  *reinterpret_cast<uint64_t*>(&result) = (e << 52) | m;
+
+  return result;
 }
 
 std::tuple<FValue, FValue> swapIfGTE(FValue a, FValue b) {
@@ -128,6 +176,7 @@ void FPAdd::body() {
   auto minuend_is_zero_4 = shiftRegister(minuend_is_zero_3, adder.getDelay());
   auto e1_4 = shiftRegister(e1_3, adder.getDelay());
 
+  SHOW(e1_4);
   SHOW(mantissaSum);
 
   // stage 5: shift sum if necessary and increment exponent
@@ -136,6 +185,7 @@ void FPAdd::body() {
 
   SHOW(shiftedMantissaOut);
   SHOW(shiftedMantissaShifted);
+  SHOW(m_6);
 
   io("c") <<= cat({
     exponentAdder(e1_4, shiftedMantissaShifted, minuend_is_zero_4),
@@ -147,8 +197,8 @@ FValue isEitherZero(FValue a, FValue b) {
   uint32_t m = a("m").bitCount();
   uint32_t e = a("e").bitCount();
 
-  return (a("e") == uval(0, e) & a("m") == uval(0, m)) |
-         (b("e") == uval(0, e) & b("m") == uval(0, m));
+  return ((a("e") == uval(0, e)) & (a("m") == uval(0, m))) |
+         ((b("e") == uval(0, e)) & (b("m") == uval(0, m)));
 }
 
 FValue addExponents(FValue e1, FValue e2) {
@@ -187,6 +237,7 @@ FValue handleZero(FValue m, FValue e, FValue underflow, FValue zero) {
 }
 
 void FPMult::body() {
+  // + 1
   auto op1 = regNext(ufloatUnpack(io("a"), cfg));
   auto op2 = regNext(ufloatUnpack(io("b"), cfg));
 
@@ -195,29 +246,113 @@ void FPMult::body() {
   multMantissas.io("a") <<= cat({uval(1), op1("m")});
   multMantissas.io("b") <<= cat({uval(1), op2("m")});
 
+  llvm::outs() << "dspDelay: " << multMantissas.getDelay() << "\n";
+  //assert(false);
+
+  // + 1
   auto zeroCheck = isEitherZero(op1, op2);
-  auto addExponentsWithOffset = addExponents(op1("e"), op2("e"));
+  // + 1 + 1
+  auto addExponentsWithOffset = wireInit(addExponents(op1("e"), op2("e")), "addExponentsWithOffset");
 
   // stage 2
   uint32_t dspDelay = multMantissas.getDelay();
+  
+  // + 1 + dspDelay
+  auto xx = wireInit(shiftRegister(addExponentsWithOffset, dspDelay - 1), "xx");
+  // 1 + dspDelay
+  auto yy = wireInit(multMantissas.io("c").head(1), "yy");
+  
+  // + 1 + dspDelay
   auto [eOut, underflowOut] = incrementExponentAndSubtractOffset(
-    shiftRegister(addExponentsWithOffset, dspDelay - 1),
-    multMantissas.io("c").head(1)
+    xx,
+    yy
   );
 
+  eOut = wireInit(eOut, "eOut");
+  underflowOut = wireInit(underflowOut, "underflowOut");
+
+  // + 1 + dspDelay
+  auto mOut = wireInit(selectMantissa(multMantissas.io("c"), cfg.mantissaWidth), "mOut");
+
+  // + 1 + dspDelay + 1
   auto result = handleZero(
-    selectMantissa(multMantissas.io("c"), cfg.mantissaWidth),
+    mOut,
     eOut,
     underflowOut,
-    shiftRegister(zeroCheck, dspDelay - 1)
+    // + 1 + dspDelay
+    shiftRegister(zeroCheck, dspDelay)
   );
+
+  uint32_t analysisDelay = TimingAnalysis::getEndTimeOf(result);
+  llvm::outs() << "analysisDelay: " << analysisDelay << "\n";
 
   io("c") <<= result;
 }
 
+void FPConvert::body() {
+  // TODO: some bug here
+  auto uBias = uval((1 << (cfg.exponentWidth - 1)) - 1);
+  auto fBias = uval((1 << (is32Bit ? 7 : 10)) - 1);
+
+  //assert((1 << (cfg.exponentWidth - 1)) - 1 == (1 << (is32Bit ? 7 : 10)) - 1);
+
+  auto exp = wireInit(io("in") >> cfg.mantissaWidth, "exp");
+  auto man = wireInit((io("in") & uval((1 << cfg.mantissaWidth) - 1))(cfg.getWidth() - cfg.exponentWidth - 1, 0), "man").read();
+
+  auto expBiased = regNext(exp.read() - uBias, "expBiased");
+  auto newExp = regNext(expBiased.read() + fBias, "newExp");
+  auto expCut = wireInit(newExp.read().tail(newExp.read().bitCount() - (is32Bit ? 8 : 11)), "expCut");
+
+  FValue newMan;
+
+  if (is32Bit) {
+    if (cfg.mantissaWidth >= 23)
+      newMan = regNext(man >> (cfg.mantissaWidth - 23), "newMan");
+    else
+      newMan = regNext(man << (23 - cfg.mantissaWidth), "newMan");
+  } else {
+    if (cfg.mantissaWidth >= 52)
+      newMan = regNext(man >> (cfg.mantissaWidth - 52), "newMan");
+    else
+      newMan = regNext(man << (52 - cfg.mantissaWidth), "newMan");
+  }
+
+  assert(newMan.bitCount() == (is32Bit ? 23 : 52));
+  assert(expCut.read().bitCount() == (is32Bit ? 8 : 11));
+
+  newMan = regNext(newMan);
+
+  io("out") <<= cat({expCut.read(), newMan});
 }
 
-#include "lowering.hpp"
+}
+
+namespace ufloat::scheduling {
+
+uint32_t ufloatFPAddDelay(const UFloatConfig& cfg) {
+  return PipelinedAdder::getDelay(cfg.mantissaWidth + 1, 32) + 5;
+}
+
+uint32_t ufloatFPMultDelay(const UFloatConfig& cfg) {
+  uint32_t adderDelay = PipelinedAdder::getDelay((cfg.mantissaWidth + 1) * 2, 32);
+  uint32_t leafCount = getDSPTiles(cfg.mantissaWidth + 1).size();
+  uint32_t treeHeight = clog2(leafCount - 1);
+  uint32_t dspDelay = treeHeight * adderDelay + 1;
+  llvm::outs() << "ufloatFPMultDelay()\n";
+  llvm::outs() << "  adderDelay: " << adderDelay << "\n";
+  llvm::outs() << "  leafCount: " << leafCount << "\n";
+  llvm::outs() << "  treeHeight: " << treeHeight << "\n";
+  llvm::outs() << "  dspDelay: " << dspDelay << "\n";
+  return dspDelay + 1 + 1;
+}
+
+uint32_t ufloatFPConvertDelay(const UFloatConfig& cfg) {
+  return 2;
+}
+
+}
+
+#include <firp/lowering.hpp>
 
 using namespace ::firp;
 using namespace ::circt::firrtl;
@@ -230,7 +365,7 @@ void generateFPAdd() {
   assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
   assert(context->getOrLoadDialect<circt::sv::SVDialect>());
 
-  initFirpContext(context.get(), "FPAdd");
+  createFirpContext(context.get(), "FPAdd");
 
   {
     ufloat::FPAdd add(ufloat::UFloatConfig{8, 23});
@@ -238,7 +373,7 @@ void generateFPAdd() {
   }
 
   firpContext()->finish();
-  firpContext()->dump();
+  //firpContext()->dump();
 
   assert(succeeded(lowerFirrtlToHw()));
   assert(succeeded(exportVerilog(".")));
@@ -248,6 +383,35 @@ void generateDSPMult() {
 
 }
 
+class TwoFPMults : public Module<TwoFPMults> {
+  ufloat::UFloatConfig cfg;
+public:
+  TwoFPMults(const ufloat::UFloatConfig& cfg):
+    Module<TwoFPMults>(
+      "TwoFPMults",
+      {
+        Input("a1", uintType(cfg.getWidth())),
+        Input("a2", uintType(cfg.getWidth())),
+        Input("b1", uintType(cfg.getWidth())),
+        Input("b2", uintType(cfg.getWidth())),
+        Output("c1", uintType(cfg.getWidth())),
+        Output("c2", uintType(cfg.getWidth()))
+      },
+      cfg
+    ), cfg(cfg) { build(); }
+
+  void body() {
+    ufloat::FPMult mult1(cfg);
+    ufloat::FPMult mult2(cfg);
+    mult1.io("a") <<= io("a1");
+    mult1.io("b") <<= io("b1");
+    mult2.io("a") <<= io("a2");
+    mult2.io("b") <<= io("b2");
+    io("c1") <<= mult1.io("c");
+    io("c2") <<= mult2.io("c");
+  }
+};
+
 void generateFPMult() {
   std::unique_ptr<mlir::MLIRContext> context = std::make_unique<mlir::MLIRContext>();
   assert(context->getOrLoadDialect<circt::hw::HWDialect>());
@@ -255,15 +419,20 @@ void generateFPMult() {
   assert(context->getOrLoadDialect<circt::firrtl::FIRRTLDialect>());
   assert(context->getOrLoadDialect<circt::sv::SVDialect>());
 
-  initFirpContext(context.get(), "FPMult");
+  createFirpContext(context.get(), "TwoFPMults");
 
   {
-    ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
+    //ufloat::FPMult mult(ufloat::UFloatConfig{8, 23});
+    //mult.makeTop();
+
+    TwoFPMults mult(ufloat::UFloatConfig{8, 23});
     mult.makeTop();
   }
 
   firpContext()->finish();
   firpContext()->dump();
+
+  llvm::outs() << "mult delay: " << ufloat::scheduling::ufloatFPMultDelay(ufloat::UFloatConfig{8, 23}) << "\n";
 
   assert(succeeded(lowerFirrtlToHw()));
   assert(succeeded(exportVerilog(".")));

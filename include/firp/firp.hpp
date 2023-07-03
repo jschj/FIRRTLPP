@@ -98,6 +98,7 @@ public:
 
 class ModuleBuilder;
 
+// TODO: fix this mess
 class FirpContext {
 public:
   MLIRContext *ctxt;
@@ -112,14 +113,18 @@ public:
   std::stack<Value> clockStack;
   std::stack<Value> resetStack;
 
-  std::string defaultClockName;
-  std::string defaultResetName;
+  std::string defaultClockName = "clock";
+  std::string defaultResetName = "reset";
 public:
   //DeclaredModules declaredModules;
   std::unique_ptr<ModuleBuilder> moduleBuilder;
 
-  FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
-  FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  FirpContext(MLIRContext *ctxt):
+    ctxt(ctxt), opBuilder(ctxt) {}
+
+  //FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  //FirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName);
+  //FirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName);
 
   OpBuilder& builder() { return opBuilder; }
   MLIRContext *context() { return ctxt; }
@@ -133,7 +138,7 @@ public:
   void beginModuleDeclaration();
   void endModuleDeclaration();
 
-  void finish();
+  LogicalResult finish();
 
   void verify() {
     assert(succeeded(::mlir::verify(root.getOperation(), true)));
@@ -144,8 +149,13 @@ public:
 };
 
 FirpContext *firpContext();
-void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
-void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+//void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+//void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+//void initFirpContext(CircuitOp circuitOp, const std::string& defaultClockName = "clock", const std::string& defaultResetName = "reset");
+
+void createFirpContext(MLIRContext *ctxt, StringRef circuitName);
+void attachFirpContext(ModuleOp modOp, StringRef circuitName);
+void attachFirpContext(CircuitOp circuitOp);
 
 class ModuleBuilder {
 public:
@@ -168,6 +178,11 @@ private:
   uint32_t uid = 0;
   FModuleOp topOp;
 public:
+  void setInitialUid(uint32_t uid) {
+    assert(this->uid == 0 && "uid already set");
+    this->uid = uid;
+  }
+
   // All args must implement DenseMapInfo. Use StringRef instead of std::string.
   template <class...Args>
   uint32_t getSignatureId(Args...args) {
@@ -287,9 +302,22 @@ UIntType uintType(uint32_t bitWidth);
 SIntType sintType(uint32_t bitWidth);
 IntType bitType();
 ClockType clockType();
-BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements);
+
+template <class Container = std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>>>
+BundleType bundleType(Container elements) {
+  std::vector<BundleType::BundleElement> els;
+
+  for (const auto& [name, flip, type] : elements)
+    els.push_back(BundleType::BundleElement(
+      firpContext()->builder().getStringAttr(name), flip, type
+    ));
+
+  return BundleType::get(firpContext()->context(), els);
+}
+
 BundleType readyValidType(FIRRTLBaseType elementType);
 FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix);
+FVectorType vectorType(FIRRTLBaseType elementType, uint32_t n);
 
 class ConnectResult {
   bool successful;
@@ -323,10 +351,14 @@ public:
   FValue operator==(FValue other);
   FValue operator!=(FValue other);
 
+  // bit extraction
   FValue operator()(size_t hi, size_t lo);
   FValue operator()(size_t index);
+  // struct field extraction
   FValue operator()(const std::string& fieldName);
+  // vector extraction (dynamic and static)
   FValue operator[](FValue index);
+  FValue operator[](size_t index);
 
   FValue operator<<(uint32_t amount);
   FValue operator>>(uint32_t amount);
@@ -347,6 +379,8 @@ public:
   FValue tail(uint32_t n);
   FValue asSInt();
   FValue asUInt();
+  // horizontally fold bits with or operation
+  FValue orr();
 };
 
 FValue lift(Value val);
@@ -360,6 +394,8 @@ FValue ones(FIRRTLBaseType type);
 FValue doesFire(FValue readyValidValue);
 FValue clockToInt(FValue clock);
 FValue shiftRegister(FValue input, uint32_t delay);
+
+Value hwStructCast(Value input, Type targetType);
 
 //inline FValue operator""_u(unsigned long long n) {
 //  return uint(n);
@@ -414,6 +450,26 @@ FValue bundleCreate(BundleType type, Container container) {
   ).getResult();
 }
 
+template <class Iterator>
+FValue treeFold(Iterator begin, Iterator end, const std::function<FValue(FValue, FValue)>& associativeOp) {
+  size_t size = std::distance(begin, end);
+  
+  assert(size > 0 && "treeFold is not defined for 0 arguments");
+
+  if (size == 1)
+    return *begin;
+
+  if (size == 2)
+    return associativeOp(*begin, *(begin + 1));
+
+  size_t half = size / 2;
+
+  FValue lhs = treeFold(begin, begin + half, associativeOp);
+  FValue rhs = treeFold(begin + half, end, associativeOp);
+
+  return associativeOp(lhs, rhs);
+}
+
 //constexpr FValue operator""_u(unsigned long long int n) {
 //  return FValue();
 //}
@@ -453,18 +509,22 @@ public:
 // Chisel-like convenience functions
 Reg regNext(FValue what, const std::string& name = "");
 Reg regInit(FValue init, const std::string& name = "");
+Reg regNextWhen(FValue what, FValue cond, const std::string& name = "");
 Wire wireInit(FValue what, const std::string& name = "");
 FValue named(FValue what, const std::string& name);
 
 struct Port {
   std::string name;
   bool isInput;
-  FIRRTLBaseType type;
+  Type type;
 
   Port() {}
-  Port(const std::string& name, bool isInput, FIRRTLBaseType type):
+  Port(const std::string& name, bool isInput, Type type):
     name(name), isInput(isInput), type(type) {}
 };
+
+Port Input(const std::string& name, Type type);
+Port Output(const std::string& name, Type type);
 
 template <class ConcreteModule>
 class Module {
@@ -540,8 +600,9 @@ public:
   }
 
   void build() {
-    //if (wasBuilt)
-    //  return;
+    // BUG: ???
+
+    // check that build() was not already called for this module
     assert(!wasBuilt && "Module was already built. Make sure that build() is only called once.");
     firpContext()->moduleBuilder->build(signatureId);
     wasBuilt = true;
@@ -551,17 +612,67 @@ public:
     // io() behaves differently depending on whether we are inside the currently
     // declared modules or are talking to the ports of an instance.
 
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    uint32_t index = it->second;
+
     bool isFromOutside = !firpContext()->moduleBuilder->isInBodyOf(signatureId);
 
     if (isFromOutside)
-      return instOp.getResults()[portIndices.at(name)];
+      return instOp.getResults()[index];
     else
-      return modOp.getBodyBlock()->getArguments()[portIndices.at(name)];
+      return modOp.getBodyBlock()->getArguments()[index];
   }
 
-  void makeTop() {
+  FModuleOp makeTop() {
+    //removeInstance();
+
+    //firpContext()->moduleBuilder->setTop(signatureId);
+
+    // build a wrapper module with the base name
+    firpContext()->beginModuleDeclaration();
+
+    FModuleOp wrapperOp = firpContext()->builder().create<FModuleOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(baseName),
+      ConventionAttr::get(firpContext()->context(), Convention::Internal),
+      modOp.getPorts()
+    );
+    llvm::outs() << "created wrapper module for " << baseName << "\n";
+
+    Value newClock = wrapperOp.getBodyBlock()->getArgument(0);
+    Value newReset = wrapperOp.getBodyBlock()->getArgument(1);
+    firpContext()->beginContext(newClock, newReset, wrapperOp.getBodyBuilder());
+    llvm::outs() << "began new context\n";
+
+    InstanceOp cloned = cast<InstanceOp>(instOp->clone());
+    instOp->erase();
+    firpContext()->builder().insert(cloned);
+    //instOp->erase();
+
+    for (size_t i = 0; i < wrapperOp.getNumPorts(); ++i) {
+      FValue arg = wrapperOp.getArguments()[i];
+      FValue res = cloned.getResults()[i];
+
+      if (modOp.getPorts()[i].direction == Direction::In)
+        res <<= arg;
+      else
+        arg <<= res;
+    }
+
+    firpContext()->endContext();
+    firpContext()->endModuleDeclaration();
+
+    return wrapperOp;
+  }
+
+  void removeInstance() {
     instOp.getOperation()->erase();
-    firpContext()->moduleBuilder->setTop(signatureId);
   }
 
   std::string getName() const {
@@ -570,6 +681,21 @@ public:
 
   std::string getBaseName() const {
     return baseName;
+  }
+
+  FModuleOp getModuleOp() const {
+    return modOp;
+  }
+
+  uint32_t getPortIndex(const std::string& name) const {
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    return it->second;
   }
 };
 
@@ -631,11 +757,54 @@ public:
 
   FValue io(const std::string& name) {
     // Connection always happens from outside with external modules.
-    return instOp.getResults()[portIndices.at(name)];
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    uint32_t index = it->second;
+    return instOp.getResults()[index];
   }
 
   StringRef getInstanceName() {
     return instOp.getName();
+  }
+};
+
+class FIRModule {
+  FModuleOp modOp;
+  InstanceOp instOp;
+  std::unordered_map<std::string, uint32_t> portIndices;
+public:
+  FIRModule(FModuleOp modOp) {
+    this->modOp = modOp;
+    this->instOp = firpContext()->builder().create<InstanceOp>(
+      firpContext()->builder().getUnknownLoc(),
+      modOp,
+      firpContext()->builder().getStringAttr(modOp.getName().str() + "_instance")
+    );
+
+    uint32_t index = 0;
+    for (const PortInfo& portInfo: modOp.getPorts())
+      portIndices[portInfo.getName().str()] = index++;
+
+    llvm::outs() << "instantiated " << modOp.getName() << " with the following ports:\n";
+    for (const PortInfo& portInfo: modOp.getPorts())
+      llvm::outs() << "  " << portInfo.getName() << "\n";
+  }
+
+  FValue io(const std::string& name) {
+    auto it = portIndices.find(name);
+
+    if (it == portIndices.end()) {
+      llvm::errs() << "port " << name << " does not exist\n";
+      assert(false && "port not found");
+    }
+
+    uint32_t index = it->second;
+    return instOp.getResults()[index];
   }
 };
 

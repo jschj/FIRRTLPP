@@ -1,4 +1,6 @@
-#include "firp.hpp"
+#include <firp/firp.hpp>
+
+#include <iostream>
 
 
 namespace firp {
@@ -16,40 +18,12 @@ llvm::hash_code compute_hash(const circt::firrtl::FIRRTLBaseType& t) {
 }
 
 namespace firp {
-/*
-bool DeclaredModules::isDeclared(llvm::hash_code hashValue) {
-  return declaredModules.find(hashValue) != declaredModules.end() ||
-    externalDeclaredModules.find(hashValue) != externalDeclaredModules.end();
-}
-
-void DeclaredModules::addDeclared(llvm::hash_code hashValue, FModuleOp decl) {
-  declaredModules[hashValue] = decl;
-}
-
-FModuleOp DeclaredModules::getDeclared(llvm::hash_code hashValue) {
-  return declaredModules[hashValue];
-}
-
-void DeclaredModules::setTop(llvm::hash_code hashValue) {
-  assert(isDeclared(hashValue));
-  topMod = hashValue;
-}
-
-FModuleOp DeclaredModules::getTop() {
-  assert(topMod.has_value());
-  return declaredModules[topMod.value()];
-}
-
-void DeclaredModules::addDeclared(llvm::hash_code hashValue, FExtModuleOp decl) {
-  externalDeclaredModules[hashValue] = decl;
-}
-
-FExtModuleOp DeclaredModules::getExternalDeclared(llvm::hash_code hashValue) {
-  return externalDeclaredModules[hashValue];
-}
- */
 
 void ModuleBuilder::build(uint32_t sigId) {
+  // check if module was already constructed
+  if (constructed.contains(sigId))
+    return;
+
   auto constructable = constructables[sigId];
   FModuleOp modOp = constructable.modOp;
 
@@ -66,7 +40,7 @@ void ModuleBuilder::build(uint32_t sigId) {
 
   constructed.insert(sigId);
 }
-
+/*
 FirpContext::FirpContext(MLIRContext *ctxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName):
   ctxt(ctxt), opBuilder(ctxt), defaultClockName(defaultClockName), defaultResetName(defaultResetName),
   moduleBuilder(std::make_unique<ModuleBuilder>()) {
@@ -103,6 +77,18 @@ FirpContext::FirpContext(ModuleOp root, const std::string& topModule, const std:
   opBuilder = circuitOp.getBodyBuilder();
 }
 
+FirpContext::FirpContext(CircuitOp circuitOp, const std::string& defaultClockName, const std::string& defaultResetName):
+  opBuilder(ctxt) {
+  this->ctxt = circuitOp.getContext();
+  this->circuitOp = circuitOp;
+  this->defaultClockName = defaultClockName;
+  this->defaultResetName = defaultResetName;
+  this->root = circuitOp->getParentOfType<ModuleOp>();
+  this->moduleBuilder = std::make_unique<ModuleBuilder>();
+
+  opBuilder = circuitOp.getBodyBuilder();
+}
+*/
 void FirpContext::beginContext(Value clock, Value reset, OpBuilder bodyBuilder) {
   builderStack.push(opBuilder);
   opBuilder = bodyBuilder;
@@ -133,11 +119,13 @@ void FirpContext::endModuleDeclaration() {
   endContext();
 }
 
-void FirpContext::finish() {
+LogicalResult FirpContext::finish() {
   assert(!moduleBuilder->hasUnfinishedConstructions() && "Some modules have not been constructed. Make sure their destructor is called before calling finish().");
 
   // Our top module currently has the name "MyTop_<some hash value>" whereas CircuitOp
   // is called MyTop. We construct a module named MyTop that wraps MyTop_<some hash value>.
+
+  return ::mlir::verify(root.getOperation(), true);
 
   beginModuleDeclaration();
 
@@ -172,6 +160,8 @@ void FirpContext::finish() {
   endContext();
 
   endModuleDeclaration();
+
+  //return wrapper;
 }
 
 static std::unique_ptr<FirpContext> ctxt;
@@ -180,12 +170,57 @@ FirpContext *firpContext() {
   return ctxt.get();
 }
 
-void initFirpContext(MLIRContext *mlirCtxt, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
-  ctxt = std::make_unique<FirpContext>(mlirCtxt, topModule, defaultClockName, defaultResetName);
+void createFirpContext(MLIRContext *_ctxt, StringRef circuitName) {
+  ctxt = std::make_unique<FirpContext>(_ctxt);
+  
+  firpContext()->root = firpContext()->builder()
+    .create<ModuleOp>(firpContext()->builder().getUnknownLoc());
+
+  firpContext()->builder()
+    .setInsertionPointToStart(&firpContext()->root.getBodyRegion().front());
+
+  firpContext()->circuitOp = firpContext()->builder()
+    .create<CircuitOp>(
+      firpContext()->builder().getUnknownLoc(),
+      firpContext()->builder().getStringAttr(circuitName)
+  );
+
+  firpContext()->opBuilder = firpContext()->circuitOp.getBodyBuilder();
+  firpContext()->moduleBuilder = std::make_unique<ModuleBuilder>();  
 }
 
-void initFirpContext(ModuleOp root, const std::string& topModule, const std::string& defaultClockName, const std::string& defaultResetName) {
-  ctxt = std::make_unique<FirpContext>(root, topModule, defaultClockName, defaultResetName);
+void attachFirpContext(ModuleOp modOp, StringRef circuitName) {
+  ctxt = std::make_unique<FirpContext>(modOp.getContext());
+  
+  firpContext()->root = modOp;
+
+  firpContext()->builder()
+    .setInsertionPointToStart(&firpContext()->root.getBodyRegion().front());
+
+  // Is a CircuitOp already present?
+  modOp.getBodyRegion().front().walk([&](CircuitOp op) {
+    firpContext()->circuitOp = op;
+  });
+
+  if (!firpContext()->circuitOp)
+    firpContext()->circuitOp = firpContext()->builder()
+      .create<CircuitOp>(
+        firpContext()->builder().getUnknownLoc(),
+        firpContext()->builder().getStringAttr(circuitName)
+    );
+
+  firpContext()->opBuilder = firpContext()->circuitOp.getBodyBuilder();
+  firpContext()->moduleBuilder = std::make_unique<ModuleBuilder>();  
+}
+
+void attachFirpContext(CircuitOp circuitOp) {
+  ctxt = std::make_unique<FirpContext>(circuitOp.getContext());
+
+  firpContext()->ctxt = circuitOp.getContext();
+  firpContext()->root = circuitOp->getParentOfType<ModuleOp>();
+  firpContext()->circuitOp = circuitOp;
+  firpContext()->opBuilder = circuitOp.getBodyBuilder();
+  firpContext()->moduleBuilder = std::make_unique<ModuleBuilder>();  
 }
 
 FValue lift(Value val) {
@@ -266,6 +301,10 @@ FValue zeros(FIRRTLBaseType type) {
       zeroValues.push_back(zeros(el.type));
 
     return bundleCreate(bundleType, zeroValues);
+  } else if (FVectorType vecType = type.dyn_cast<FVectorType>()) {
+    auto z = zeros(vecType.getElementType());
+    SmallVector<FValue> zeroValues(vecType.getNumElements(), z);
+    return vector(zeroValues);
   } else if (IntType intType = type.dyn_cast<IntType>()) {
     int32_t width = intType.getBitWidthOrSentinel();
     assert(width >= 0 && "cannot create zeroes for int type with uninferred width");
@@ -317,6 +356,14 @@ FValue shiftRegister(FValue input, uint32_t delay) {
     result = regNext(result);
 
   return result;
+}
+
+Value hwStructCast(Value input, Type targetType) {
+  return firpContext()->builder().create<HWStructCastOp>(
+    firpContext()->builder().getUnknownLoc(),
+    targetType,
+    input
+  ).getResult();
 }
 
 FValue FValue::operator~() {
@@ -394,6 +441,14 @@ FValue FValue::operator()(const std::string& fieldName) {
 
 FValue FValue::operator[](FValue index) {
   return firpContext()->builder().create<SubaccessOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this,
+    index
+  ).getResult();
+}
+
+FValue FValue::operator[](size_t index) {
+  return firpContext()->builder().create<SubindexOp>(
     firpContext()->builder().getUnknownLoc(),
     *this,
     index
@@ -516,6 +571,13 @@ FValue FValue::asUInt() {
   ).getResult();
 }
 
+FValue FValue::orr() {
+  return firpContext()->builder().create<OrRPrimOp>(
+    firpContext()->builder().getUnknownLoc(),
+    *this
+  ).getResult();
+}
+
 Reg::Reg(FIRRTLBaseType type, FValue resetValue, const std::string& name): type(type) {
   regOp = firpContext()->builder().create<RegResetOp>(
     firpContext()->builder().getUnknownLoc(),
@@ -550,6 +612,12 @@ Reg regInit(FValue init, const std::string& name) {
   return reg;
 }
 
+Reg regNextWhen(FValue what, FValue cond, const std::string& name) {
+  Reg reg(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name);
+  when (cond, [&]() { reg <<= what; });
+  return reg;
+}
+
 Wire wireInit(FValue what, const std::string& name) {
   Wire wire(llvm::dyn_cast<FIRRTLBaseType>(what.getType()), name);
   wire <<= what;
@@ -563,6 +631,14 @@ FValue named(FValue what, const std::string& name) {
     what,
     firpContext()->builder().getStringAttr(name)
   ).getResult();
+}
+
+Port Input(const std::string& name, Type type) {
+  return Port(name, true, type);
+}
+
+Port Output(const std::string& name, Type type) {
+  return Port(name, false, type);
 }
 
 void Conditional::build(size_t i, OpBuilder builder) {
@@ -634,16 +710,6 @@ ClockType clockType() {
   return ClockType::get(firpContext()->context());
 }
 
-BundleType bundleType(std::initializer_list<std::tuple<std::string, bool, FIRRTLBaseType>> elements) {
-  std::vector<BundleType::BundleElement> els;
-  for (const auto& [name, flip, type] : elements)
-    els.push_back(BundleType::BundleElement(
-      firpContext()->builder().getStringAttr(name), flip, type
-    ));
-
-  return BundleType::get(firpContext()->context(), els);
-}
-
 BundleType readyValidType(FIRRTLBaseType elementType) {
   return bundleType({
     {"ready", true, bitType()},
@@ -676,6 +742,10 @@ FIRRTLBaseType flattenType(FIRRTLBaseType type, const std::string& infix) {
 
   return bundleType(newElements);
 }*/
+
+FVectorType vectorType(FIRRTLBaseType elementType, uint32_t n) {
+  return FVectorType::get(elementType, n);
+}
 
 Memory::Memory(FIRRTLBaseType dataType, size_t depth): dataType(dataType) {
   //size_t addrBits = clog2(depth - 1);

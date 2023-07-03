@@ -1,6 +1,6 @@
-#include "firpTest.hpp"
+#include <firp/firpTest.hpp>
 
-#include "lowering.hpp"
+#include <firp/lowering.hpp>
 
 
 namespace firp::test {

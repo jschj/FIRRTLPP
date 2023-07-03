@@ -1,11 +1,11 @@
 #include <iostream>
-#include "firp.hpp"
-#include "firpQueue.hpp"
-#include "AXIStream.hpp"
-#include "AXI4.hpp"
+#include <firp/firp.hpp>
+#include <firp/firpQueue.hpp>
+#include <firp/AXIStream.hpp>
+#include <firp/AXI4.hpp>
 //#include "esi.hpp"
-#include "ufloat.hpp"
-#include "lowering.hpp"
+#include <firp/ufloat.hpp>
+#include <firp/lowering.hpp>
 
 using namespace firp;
 //using namespace axi4;
@@ -93,7 +93,7 @@ int main(int argc, const char **argv) {
 
   //initFirpContext(context.get(), "FPAdd");
   //initFirpContext(context.get(), "DSPMult");
-  initFirpContext(context.get(), "FPMult");
+  createFirpContext(context.get(), "FPMult");
 
   //llvm::outs()
   //  << firpContext()->moduleBuilder->getSignatureId(123, 456) << "\n"

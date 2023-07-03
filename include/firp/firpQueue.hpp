@@ -75,7 +75,8 @@ public:
     ram.readPort()("addr") <<= deqIndex.read();
     ram.readPort()("en") <<= deqFire;
     ram.readPort()("clk") <<= firpContext()->getClock();
-    io("deq")("bits") <<= ram.readPort()("data");
+    // am.readPort()("data") is undefined when en is low
+    io("deq")("bits") <<= mux(deqFire, ram.readPort()("data"), zeros(elementType));
   }
 };
 

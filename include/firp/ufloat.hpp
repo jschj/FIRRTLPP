@@ -23,6 +23,9 @@ struct UFloat : public firp::FValue {
 firp::FValue ufloatUnpack(firp::FValue what, const UFloatConfig& cfg);
 firp::FValue ufloatPack(firp::FValue what, const UFloatConfig& cfg);
 
+uint64_t doubleToUFloatBits(double val, const UFloatConfig& cfg);
+double ufloatBitsToDouble(uint64_t val, const UFloatConfig& cfg);
+
 }
 
 namespace llvm {
@@ -94,4 +97,31 @@ public:
   void body();
 };
 
+class FPConvert : public firp::Module<FPConvert> {
+  UFloatConfig cfg;
+  bool is32Bit;
+public:
+  FPConvert(const UFloatConfig& cfg, bool is32Bit):
+    firp::Module<FPConvert>(
+      "FPConvert",
+      {
+        firp::Port("in", true, firp::uintType(cfg.getWidth())),
+        firp::Port("out", false, firp::uintType(is32Bit ? 32 : 64))
+      },
+      cfg
+    ), cfg(cfg), is32Bit(is32Bit) { build(); }
+
+  void body();
+};
+
 }
+
+namespace ufloat::scheduling {
+
+uint32_t ufloatFPAddDelay(const UFloatConfig& cfg);
+uint32_t ufloatFPMultDelay(const UFloatConfig& cfg);
+uint32_t ufloatFPConvertDelay(const UFloatConfig& cfg);
+
+}
+
+void generateFPMult();
