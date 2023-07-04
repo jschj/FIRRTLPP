@@ -291,17 +291,18 @@ void FPMult::body() {
 
 void FPConvert::body() {
   // TODO: some bug here
-  auto uBias = uval((1 << (cfg.exponentWidth - 1)) - 1);
-  auto fBias = uval((1 << (is32Bit ? 7 : 10)) - 1);
+  auto uBias = wireInit(uval((1 << (cfg.exponentWidth - 1)) - 1), "uBias").read();
+  auto fBias = wireInit(uval((1 << (is32Bit ? 7 : 10)) - 1), "fBias").read();
 
   //assert((1 << (cfg.exponentWidth - 1)) - 1 == (1 << (is32Bit ? 7 : 10)) - 1);
 
-  auto exp = wireInit(io("in") >> cfg.mantissaWidth, "exp");
+  auto exp = wireInit((io("in") >> cfg.mantissaWidth), "exp");
   auto man = wireInit((io("in") & uval((1 << cfg.mantissaWidth) - 1))(cfg.getWidth() - cfg.exponentWidth - 1, 0), "man").read();
 
-  auto expBiased = regNext(exp.read() - uBias, "expBiased");
-  auto newExp = regNext(expBiased.read() + fBias, "newExp");
-  auto expCut = wireInit(newExp.read().tail(newExp.read().bitCount() - (is32Bit ? 8 : 11)), "expCut");
+  auto expBiased = regNext(exp.read().asSInt() - uBias.extend(cfg.exponentWidth + 1).asSInt(), "expBiased");
+  // expBiased needs to be sign extended?
+  auto newExp = regNext(expBiased.read() + fBias.extend(is32Bit ? 8 : 11).asSInt(), "newExp");
+  auto expCut = wireInit(newExp.read().tail(newExp.read().bitCount() - (is32Bit ? 8 : 11)).asUInt(), "expCut");
 
   FValue newMan;
 
