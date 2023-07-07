@@ -48,20 +48,39 @@ AXIStreamSender::AXIStreamSender(const AXIStreamConfig& config):
 
 void AXIStreamReceiver::body() {
   auto elType = withLast(uintType(config.dataBits));
+  /*
   auto queue = FirpQueue(elType, 8);
-
+  
   queue.io("enq")("valid") <<= io("AXIS")("TVALID");
   queue.io("enq")("bits")("bits") <<= io("AXIS")("TDATA");
   
   queue.io("enq")("bits")("last") <<= io("AXIS")("TLAST");
   io("AXIS")("TREADY") <<= queue.io("enq")("ready");
 
-  io("deq") <<= queue.io("deq");
+  io("deq") <<= queue.io("deq");*/
+
+  auto dataQueue = FirpQueue(uintType(config.dataBits), 8);
+  auto lastQueue = FirpQueue(uintType(1), 8);
+
+  dataQueue.io("enq")("valid") <<= io("AXIS")("TVALID");
+  dataQueue.io("enq")("bits") <<= io("AXIS")("TDATA");
+
+  lastQueue.io("enq")("valid") <<= io("AXIS")("TVALID");
+  lastQueue.io("enq")("bits") <<= io("AXIS")("TLAST");
+
+  io("AXIS")("TREADY") <<= dataQueue.io("enq")("ready") & lastQueue.io("enq")("ready");
+
+  io("deq")("valid") <<= dataQueue.io("deq")("valid") & lastQueue.io("deq")("valid");
+  io("deq")("bits")("bits") <<= dataQueue.io("deq")("bits");
+  io("deq")("bits")("last") <<= lastQueue.io("deq")("bits");
+
+  dataQueue.io("deq")("ready") <<= io("deq")("ready");
+  lastQueue.io("deq")("ready") <<= io("deq")("ready");
 }
 
 void AXIStreamSender::body() {
   auto elType = withLast(uintType(config.dataBits));
-  auto queue = FirpQueue(elType, 8);
+  auto queue = FirpQueue(elType, 7);
 
   queue.io("enq") <<= io("enq");
 

@@ -12,6 +12,7 @@ add_library(firp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AXI4.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AXIStreamConverter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/timings.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/queue.cpp
 )
 target_include_directories(firp PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include/
