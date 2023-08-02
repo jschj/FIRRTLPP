@@ -29,3 +29,24 @@ target_link_libraries(firp PRIVATE ${LIBS}
   CIRCTExportVerilog
   CIRCTImportFIRFile
 )
+
+add_executable(lower-firrtl
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lowerFirrtl.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lowering.cpp
+)
+target_include_directories(lower-firrtl PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/
+)
+target_link_libraries(lower-firrtl PRIVATE ${LIBS}
+  CIRCTHW
+  CIRCTSeq
+  CIRCTFIRRTL
+  CIRCTFIRRTLToHW
+  CIRCTFIRRTLTransforms
+  CIRCTSeqTransforms
+  CIRCTSVTransforms
+  CIRCTExportVerilog
+  CIRCTImportFIRFile
+)

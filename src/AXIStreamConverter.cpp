@@ -59,6 +59,8 @@ void MultiRingBuffer::body() {
 }
 
 void AXIStreamConverter::body() {
+  assert(masterConfig.dataBits % 8 == 0 && slaveConfig.dataBits % 8 == 0 && "data width must be a multiple of 8");
+
   uint32_t inByteWidth = slaveConfig.dataBits / 8;
   uint32_t outByteWidth = masterConfig.dataBits / 8;
   uint32_t slotCount = 1 << clog2(std::max(inByteWidth, outByteWidth) * 2);

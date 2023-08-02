@@ -24,6 +24,10 @@ mlir::LogicalResult lowerFirrtlToHw(bool canonicalize) {
   mlir::MLIRContext *ctxt = root.getContext();
   mlir::PassManager pm(ctxt);
   
+  pm.nest<circt::firrtl::CircuitOp>().nest<circt::firrtl::FModuleOp>().addPass(
+    circt::firrtl::createLowerCHIRRTLPass()
+  );
+
   pm.addNestedPass<circt::firrtl::CircuitOp>(circt::firrtl::createInferWidthsPass());
 
   pm.addNestedPass<circt::firrtl::CircuitOp>(
@@ -41,7 +45,6 @@ mlir::LogicalResult lowerFirrtlToHw(bool canonicalize) {
   pm.addPass(
     circt::createLowerFIRRTLToHWPass()
   );
-
 
   // export verilog doesn't know about seq.firreg
 
