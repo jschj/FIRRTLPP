@@ -15,7 +15,7 @@ void PipelinedAdder::body() {
 
   uint32_t stageCount = bitWidth / maxAdderWidth + (bitWidth % maxAdderWidth ? 1 : 0);
   auto carry = cons(0, uintType(1));
-  //Wire result(uintType(bitWidth + 1));
+
   std::vector<FValue> resultChunks;
 
   for (uint32_t i = 0; i < stageCount; ++i) {
@@ -45,6 +45,7 @@ void PipelinedAdder::body() {
   
   io("c") <<= cat(resultChunks);
 
+  // used for debugging
   //svCocoTBVerbatim("PipelinedAdder");
 }
 
