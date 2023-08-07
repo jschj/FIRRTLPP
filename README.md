@@ -9,7 +9,7 @@ This library is in no way complete or well tested. It was developed as part of t
 
 ## Shift Register Example
 
-```
+```c++
 class ShiftRegister : public Module<ShiftRegister> {
   FIRRTLBaseType elementType;
   size_t depth;
@@ -76,7 +76,7 @@ public:
 };
 ```
 
-```
+```c++
 void PipelinedAdder::body() {
   // inspired by http://vlsigyan.com/pipeline-adder-verilog-code/
 
