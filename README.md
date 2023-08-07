@@ -49,7 +49,7 @@ void ShiftRegister::body() {
 
 ## Pipelined Integer Adder Example
 
-```
+```c++
 class PipelinedAdder : public firp::Module<PipelinedAdder> {
   uint32_t bitWidth, maxAdderWidth;
 public:
