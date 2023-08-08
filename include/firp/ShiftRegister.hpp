@@ -13,8 +13,8 @@ public:
     Module<ShiftRegister>(
       "ShiftRegister",
       {
-        Port("in", true, elementType),
-        Port("out", false, elementType)
+        Input("in", elementType),
+        Output("out", elementType)
       },
       elementType, depth
     ),
@@ -22,28 +22,5 @@ public:
 
   void body();
 };
-
-/*
-
-  class ShiftRegister : public Module<ShiftRegister> {
-  public:
-
-    ShiftRegister(FIRRTLBaseType elementType, size_t depth):
-      Module<ShiftRegister>(elementType, depth) {}
-
-    std::string name() const { return "ShiftRegister"; }
-
-    std::initializer_list<Port> ports() const {
-      return {
-        ...
-      };
-    }
-
-  };
-
-  auto shiftReg = Module<ShiftRegister>(elType, depth);
-
-
- */
 
 }
