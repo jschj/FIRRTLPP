@@ -30,8 +30,6 @@ public:
       return mux(value == cons(depth - 1), cons(0), value + cons(1));
     };
 
-    auto ram = Memory(elementType, depth);
-
     auto enqIndex = Reg(uintType(indexBits), "enqIndex");
     auto deqIndex = Reg(uintType(indexBits), "deqIndex");
 
@@ -66,17 +64,53 @@ public:
       deqIndex.write(nextDeqIndex);
     });
 
-    ram.writePort()("addr") <<= enqIndex.read();
-    ram.writePort()("en") <<= enqFire;
-    ram.writePort()("clk") <<= firpContext()->getClock();
-    ram.writePort()("data") <<= io("enq")("bits");
-    ram.writePort()("mask") <<= ram.maskEnable();
+    /*if (UIntType type = elementType.dyn_cast<UIntType>()) {
+      assert(type.getWidth().has_value() && "unbounded UInt not supported");
+      uint32_t width = type.getWidth().value();
 
-    ram.readPort()("addr") <<= deqIndex.read();
-    ram.readPort()("en") <<= deqFire;
-    ram.readPort()("clk") <<= firpContext()->getClock();
-    // am.readPort()("data") is undefined when en is low
-    io("deq")("bits") <<= mux(deqFire, ram.readPort()("data"), zeros(elementType));
+      //auto outBuf = Wire(elementType, "outBuf").read();
+      //io("deq")("bits") <<= outBuf;
+
+      SmallVector<FValue> reads;
+
+      for (uint32_t lo = 0; lo < width; lo += 8) {
+        uint32_t hi = std::min(lo + 8, width) - 1; // inclusive
+
+        auto ram = Memory(uintType(hi - lo + 1), depth);
+
+        llvm::outs() << "creating ram with width " << (hi - lo + 1) << " for bits " << hi << " to " << lo << "\n";
+
+        ram.writePort()("addr") <<= enqIndex.read();
+        ram.writePort()("en") <<= enqFire;
+        ram.writePort()("clk") <<= firpContext()->getClock();
+        ram.writePort()("data") <<= io("enq")("bits")(hi, lo);
+        ram.writePort()("mask") <<= ram.maskEnable();
+
+        ram.readPort()("addr") <<= deqIndex.read();
+        ram.readPort()("en") <<= deqFire;
+        ram.readPort()("clk") <<= firpContext()->getClock();
+        // am.readPort()("data") is undefined when en is low
+        //io("deq")("bits")(hi, lo) <<= mux(deqFire, ram.readPort()("data"), zeros(uintType(hi - lo + 1)));
+        //outBuf(hi, lo) <<= mux(deqFire, ram.readPort()("data"), zeros(uintType(hi - lo + 1)));
+        reads.push_back(mux(deqFire, ram.readPort()("data"), zeros(uintType(hi - lo + 1))));
+      }
+
+      io("deq")("bits") <<= cat(reads);
+    } else */{
+      auto ram = Memory(elementType, depth);
+
+      ram.writePort()("addr") <<= enqIndex.read();
+      ram.writePort()("en") <<= enqFire;
+      ram.writePort()("clk") <<= firpContext()->getClock();
+      ram.writePort()("data") <<= io("enq")("bits");
+      ram.writePort()("mask") <<= ram.maskEnable();
+
+      ram.readPort()("addr") <<= deqIndex.read();
+      ram.readPort()("en") <<= deqFire;
+      ram.readPort()("clk") <<= firpContext()->getClock();
+      // am.readPort()("data") is undefined when en is low
+      io("deq")("bits") <<= mux(deqFire, ram.readPort()("data"), zeros(elementType));
+    }
   }
 };
 

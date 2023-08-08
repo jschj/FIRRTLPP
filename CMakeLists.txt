@@ -11,6 +11,16 @@ add_library(firp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/AXIStream.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ShiftRegister.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/ufloat.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lowering.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/dspMult.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/pipelinedAdder.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/ESI.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/AXI4Lite.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/AXI4.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/AXIStreamConverter.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/timings.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/queue.cpp
 )
 target_include_directories(firp PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include/
@@ -113,11 +123,26 @@ target_link_libraries(ufloat PRIVATE ${LIBS}
   CIRCTSeqTransforms
   CIRCTSVTransforms
   CIRCTExportVerilog
+  CIRCTImportFIRFile
 )
 
-
-
-include_directories(${LLVM_INCLUDE_DIRS})
-include_directories(${MLIR_INCLUDE_DIRS})
-
-#mlir_check_all_link_libraries(lo2hw)
+add_executable(lower-firrtl
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lowerFirrtl.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/firp.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/lowering.cpp
+)
+target_include_directories(lower-firrtl PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/
+)
+target_link_libraries(lower-firrtl PRIVATE ${LIBS}
+  CIRCTHW
+  CIRCTSeq
+  CIRCTFIRRTL
+  CIRCTFIRRTLToHW
+  CIRCTFIRRTLTransforms
+  CIRCTSeqTransforms
+  CIRCTSVTransforms
+  CIRCTExportVerilog
+  CIRCTImportFIRFile
+)
